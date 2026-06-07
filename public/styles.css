@@ -52,6 +52,11 @@ textarea {
   background: #fbfcfc;
 }
 
+.side-panel > * {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -256,7 +261,7 @@ textarea:focus {
 }
 
 .session-section {
-  min-height: 0;
+  min-height: auto;
 }
 
 .new-session-button {
@@ -274,6 +279,9 @@ textarea:focus {
   display: grid;
   gap: 8px;
   min-height: 0;
+  max-height: min(240px, 34vh);
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .session-item {
@@ -415,25 +423,34 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  min-width: 0;
   padding: 22px 32px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(246, 247, 248, 0.92);
   backdrop-filter: blur(16px);
 }
 
+.workspace-top > div:first-child {
+  min-width: 0;
+}
+
 .workspace-top h2 {
   color: var(--ink);
   font-size: 19px;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .workspace-top p {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 5px;
   color: var(--muted);
   font-size: 13px;
+  min-width: 0;
+  row-gap: 4px;
 }
 
 .header-separator {
@@ -446,6 +463,7 @@ textarea:focus {
 .top-status {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 10px;
 }
 
@@ -690,6 +708,7 @@ textarea:focus {
 .ask-form {
   display: grid;
   gap: 10px;
+  min-width: 0;
   padding: 16px 32px 24px;
   border-top: 1px solid var(--line);
   background: rgba(246, 247, 248, 0.94);
@@ -728,6 +747,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   width: min(900px, 100%);
   margin: 0 auto;
