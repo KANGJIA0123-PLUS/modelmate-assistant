@@ -1,0 +1,35 @@
+{
+  "host": "127.0.0.1",
+  "port": 4878,
+  "claudePath": "claude",
+  "workingDirectory": ".",
+  "questionLogPath": "data/question-log.jsonl",
+  "sourceDirs": [
+    "."
+  ],
+  "retrievalMode": "local-context",
+  "model": "",
+  "maxTurns": 1,
+  "maxBudgetUsd": 0.2,
+  "timeoutMs": 600000,
+  "contextMaxChars": 8000,
+  "historyMaxMessages": 8,
+  "historyMaxChars": 6000,
+  "searchMaxMatches": 80,
+  "allowedTools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "LS"
+  ],
+  "disallowedTools": [
+    "Edit",
+    "MultiEdit",
+    "Write",
+    "NotebookEdit",
+    "Bash",
+    "WebFetch",
+    "WebSearch"
+  ],
+  "systemPrompt": "你是现网接口人的只读知识助手。内部现网、接口、配置、日志、代码、流程类问题要优先查证本地资料、Markdown 文档和代码仓。若本地没有命中，且问题属于通用知识、公开背景或概念解释，可以使用模型通用知识回答，并友好提示来源边界。若问题强时效、高风险或明确要求只基于本地资料，则不要凭空下结论，要提示补充资料或核验。不要修改、创建、删除任何文件。"
+}

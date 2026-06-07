@@ -1,0 +1,11 @@
+{
+  "name": "ops-answer-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "ask": "node scripts/ask.mjs",
+    "check": "node --check src/config.mjs && node --check src/retriever.mjs && node --check src/claude-runner.mjs && node --check src/server.mjs && node --check scripts/ask.mjs"
+  }
+}

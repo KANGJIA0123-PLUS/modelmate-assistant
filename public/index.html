@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Modelmate 辅助运营助手</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="side-panel" aria-label="配置">
+        <div class="brand">
+          <div class="brand-mark">M</div>
+          <div>
+            <h1>Modelmate 辅助运营助手</h1>
+            <p id="runtime-status" class="runtime-line"><span class="signal-dot"></span><span>连接中</span></p>
+          </div>
+        </div>
+
+        <section class="account-card" aria-label="账号">
+          <label for="operator-input">使用人账号</label>
+          <input id="operator-input" name="operator" autocomplete="name" maxlength="80" placeholder="例如：张三 / zhangsan">
+          <p id="operator-status">用于问答记录</p>
+        </section>
+
+        <section class="panel-section session-section" aria-label="历史会话">
+          <div class="section-head">
+            <h2>历史会话</h2>
+            <span id="session-count">0</span>
+          </div>
+          <button id="new-session-button" class="new-session-button" type="button">新建会话</button>
+          <div id="session-list" class="session-list"></div>
+        </section>
+
+        <section class="ops-card" aria-label="运行状态">
+          <div>
+            <span class="ops-label">Claude</span>
+            <strong id="status-model">-</strong>
+          </div>
+          <div class="ops-meter" aria-hidden="true">
+            <span></span>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-head">
+            <h2>知识源</h2>
+            <span id="source-count">0</span>
+          </div>
+          <ul id="source-list" class="source-list"></ul>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-head">
+            <h2>运行边界</h2>
+          </div>
+          <dl class="meta-list">
+            <div>
+              <dt>模型</dt>
+              <dd id="model-name">-</dd>
+            </div>
+            <div>
+              <dt>检索模式</dt>
+              <dd id="retrieval-mode">-</dd>
+            </div>
+            <div>
+              <dt>只读工具</dt>
+              <dd id="tool-list">-</dd>
+            </div>
+            <div>
+              <dt>上下文</dt>
+              <dd id="context-window">-</dd>
+            </div>
+            <div>
+              <dt>超时</dt>
+              <dd id="timeout-value">-</dd>
+            </div>
+          </dl>
+        </section>
+
+        <div id="warning-list" class="warning-list" hidden></div>
+      </aside>
+
+      <section class="workspace" aria-label="问答">
+        <header class="workspace-top">
+          <div>
+            <h2>Modelmate 辅助运营助手</h2>
+            <p>
+              <span id="current-session-name">新会话</span>
+              <span class="header-separator"></span>
+              <span id="context-badge">上下文 0 条</span>
+            </p>
+          </div>
+          <div class="top-status">
+            <span class="live-pill"><span class="pulse-dot"></span>在线</span>
+          </div>
+        </header>
+
+        <div id="conversation" class="conversation" aria-live="polite">
+          <div class="empty-state">
+            <div class="empty-mark">M</div>
+            <strong>开始提问</strong>
+            <div class="prompt-grid">
+              <button type="button" data-prompt="请根据 README.md 说明这个助手的用途，并引用依据。">README 用途</button>
+              <button type="button" data-prompt="请阅读 src/claude-runner.mjs，说明 askClaude 的处理流程。">调用流程</button>
+              <button type="button" data-prompt="请根据当前项目文件，给出这个助手下一步最值得优化的 3 点。">优化建议</button>
+            </div>
+          </div>
+        </div>
+
+        <form id="ask-form" class="ask-form">
+          <div class="input-shell">
+            <label for="question">问题</label>
+            <textarea id="question" name="question" rows="4" autocomplete="off" placeholder="例如：某个接口超时应该先看哪些配置和日志？"></textarea>
+          </div>
+          <div class="form-actions">
+            <span id="flow-status" class="flow-status">待命</span>
+            <button id="clear-button" class="secondary-button" type="button">清空</button>
+            <button id="ask-button" class="primary-button" type="submit">发送</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

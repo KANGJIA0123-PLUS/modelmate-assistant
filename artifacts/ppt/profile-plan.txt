@@ -1,0 +1,7 @@
+task mode: create
+primary deck-profile: engineering-platform
+required proof objects: one-page architecture map, flow direction, knowledge and audit stores
+source/asset requirements: based on current local Modelmate implementation and generated architecture SVG
+brand authenticity constraints: no fake external logos; use text and neutral platform styling
+profile-specific QA gates: Chinese labels must be readable; architecture relationships must be clear at thumbnail size
+known missing inputs: no company visual identity template supplied

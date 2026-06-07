@@ -1,0 +1,82 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/h1beb7",
+    "id": "h1beb7",
+    "slide": 1,
+    "layoutId": "ff3e7657-a6b5-4737-8fa8-537f5f5c78be",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "b3a395c3-99cd-492d-b5db-64631c8eddbb",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    }
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "ff3e7657-a6b5-4737-8fa8-537f5f5c78be",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "b3a395c3-99cd-492d-b5db-64631c8eddbb",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "b3a395c3-99cd-492d-b5db-64631c8eddbb",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/0bi9s36h",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "alt": "Modelmate 辅助运营助手架构图",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "a8079250-ae1f-4caa-a933-d6aa36bdb8f8",
+        "contentType": "image/jpeg",
+        "byteLength": 112978
+      }
+    }
+  ],
+  "composeRuns": []
+}

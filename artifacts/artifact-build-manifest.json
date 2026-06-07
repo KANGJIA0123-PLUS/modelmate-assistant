@@ -1,0 +1,28 @@
+{
+  "output": "/Users/kangjia/Documents/辅助运营 2/artifacts/modelmate-architecture-overview.pptx",
+  "outputBytes": 99570,
+  "slideCount": 1,
+  "slideSize": {
+    "width": 1280,
+    "height": 720
+  },
+  "previewDir": "/Users/kangjia/Documents/辅助运营 2/artifacts/ppt/preview",
+  "previewPaths": [
+    "/Users/kangjia/Documents/辅助运营 2/artifacts/ppt/preview/slide-01.png"
+  ],
+  "layoutDir": "/Users/kangjia/Documents/辅助运营 2/artifacts/ppt/layout",
+  "layoutResults": [
+    {
+      "layoutPath": "/Users/kangjia/Documents/辅助运营 2/artifacts/ppt/layout/slide-01.layout.json"
+    }
+  ],
+  "contactSheet": "/Users/kangjia/Documents/辅助运营 2/artifacts/modelmate-architecture-ppt-contact.png",
+  "slides": [
+    {
+      "index": 1,
+      "requestedSlideNumber": 1,
+      "modulePath": "/Users/kangjia/Documents/辅助运营 2/artifacts/ppt/slides/slide-01.mjs",
+      "exportName": "slide01"
+    }
+  ]
+}

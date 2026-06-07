@@ -1,0 +1,5 @@
+node_modules/
+assistant.config.json
+data/*.jsonl
+.DS_Store
+*.log
