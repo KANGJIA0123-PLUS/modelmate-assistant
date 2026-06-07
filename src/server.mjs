@@ -4,10 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.mjs";
 import { askClaude, askClaudeStream } from "./claude-runner.mjs";
+import { VersionError, VersionRegistry } from "./version-registry.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "public");
 const config = loadConfig();
+const versionRegistry = new VersionRegistry(config);
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -15,22 +17,48 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, publicConfig());
     }
 
+    if (request.method === "GET" && request.url === "/api/versions") {
+      return sendJson(response, {
+        defaultVersionId: versionRegistry.getPublicDefaultVersionId(),
+        versions: versionRegistry.listPublicVersions()
+      });
+    }
+
+    if (request.method === "GET" && request.url === "/api/health") {
+      return sendJson(response, {
+        status: "ok",
+        service: "modelmate-assistant",
+        time: new Date().toISOString()
+      });
+    }
+
+    if (request.method === "GET" && request.url === "/api/ready") {
+      return sendJson(response, {
+        status: versionRegistry.listPublicVersions().length > 0 ? "ready" : "not-ready",
+        versionCount: versionRegistry.listPublicVersions().length,
+        defaultVersionId: versionRegistry.getPublicDefaultVersionId()
+      });
+    }
+
     if (request.method === "POST" && request.url === "/api/ask") {
       const body = await readJsonBody(request);
       const question = String(body.question || "").trim();
       const operator = normalizeOperator(body.operator);
       const history = sanitizeHistory(body.history);
+      const versionContext = versionRegistry.requireVersion(body.versionId);
 
       if (!question) {
         return sendJson(response, { error: "问题不能为空。" }, 400);
       }
 
-      const result = await askClaude(question, config, { history });
+      const result = await askClaude(question, config, versionContext, { history });
       const payload = {
         answer: result.answer,
         elapsedMs: result.elapsedMs,
         quickReply: result.quickReply,
         operator,
+        versionId: versionContext.id,
+        versionName: versionContext.name,
         historyCount: history.length,
         context: result.context ? {
           terms: result.context.terms,
@@ -44,6 +72,7 @@ const server = http.createServer(async (request, response) => {
 
       await appendQuestionLog({
         operator,
+        versionContext,
         question,
         response: payload,
         request
@@ -57,12 +86,13 @@ const server = http.createServer(async (request, response) => {
       const question = String(body.question || "").trim();
       const operator = normalizeOperator(body.operator);
       const history = sanitizeHistory(body.history);
+      const versionContext = versionRegistry.requireVersion(body.versionId);
 
       if (!question) {
         return sendJson(response, { error: "问题不能为空。" }, 400);
       }
 
-      return handleAskStream({ request, response, question, operator, history });
+      return handleAskStream({ request, response, question, operator, history, versionContext });
     }
 
     if (request.method === "GET") {
@@ -71,11 +101,11 @@ const server = http.createServer(async (request, response) => {
 
     sendJson(response, { error: "Method not allowed" }, 405);
   } catch (error) {
-    sendJson(response, { error: error.message || String(error) }, 500);
+    sendJson(response, { error: error.message || String(error) }, getStatusCode(error));
   }
 });
 
-async function handleAskStream({ request, response, question, operator, history }) {
+async function handleAskStream({ request, response, question, operator, history, versionContext }) {
   const abortController = new AbortController();
   let responseEnded = false;
 
@@ -95,10 +125,18 @@ async function handleAskStream({ request, response, question, operator, history 
     response.write(`${JSON.stringify(event)}\n`);
   };
 
-  sendEvent({ type: "start", operator, historyCount: history.length, startedAt: new Date().toISOString() });
+  sendEvent({
+    type: "start",
+    jobId: null,
+    operator,
+    versionId: versionContext.id,
+    versionName: versionContext.name,
+    historyCount: history.length,
+    startedAt: new Date().toISOString()
+  });
 
   try {
-    const result = await askClaudeStream(question, config, sendEvent, {
+    const result = await askClaudeStream(question, config, versionContext, sendEvent, {
       history,
       signal: abortController.signal
     });
@@ -107,6 +145,8 @@ async function handleAskStream({ request, response, question, operator, history 
       elapsedMs: result.elapsedMs,
       quickReply: result.quickReply,
       operator,
+      versionId: versionContext.id,
+      versionName: versionContext.name,
       historyCount: history.length,
       context: result.context ? {
         terms: result.context.terms,
@@ -120,6 +160,7 @@ async function handleAskStream({ request, response, question, operator, history 
 
     await appendQuestionLog({
       operator,
+      versionContext,
       question,
       response: payload,
       request
@@ -149,9 +190,6 @@ function publicConfig() {
   return {
     host: config.host,
     port: config.port,
-    loadedPath: config.loadedPath,
-    sourceDirs: config.sourceDirs,
-    questionLogPath: config.questionLogPath,
     model: config.model,
     displayModel: config.model || "Claude Code 默认",
     maxTurns: config.maxTurns,
@@ -160,6 +198,11 @@ function publicConfig() {
     contextMaxChars: config.contextMaxChars,
     historyMaxMessages: config.historyMaxMessages,
     historyMaxChars: config.historyMaxChars,
+    defaultVersionId: versionRegistry.getPublicDefaultVersionId(),
+    queue: config.queue,
+    telemetry: {
+      enabled: Boolean(config.telemetry?.enabled)
+    },
     warnings: config.warnings,
     allowedTools: config.allowedTools,
     disallowedTools: config.disallowedTools
@@ -227,10 +270,12 @@ function normalizeOperator(value) {
   return operator.slice(0, 80);
 }
 
-async function appendQuestionLog({ operator, question, response, request }) {
+async function appendQuestionLog({ operator, versionContext, question, response, request }) {
   const entry = {
     timestamp: new Date().toISOString(),
     operator,
+    versionId: versionContext?.id || "",
+    versionName: versionContext?.name || "",
     question,
     answerPreview: String(response.answer || "").slice(0, 1200),
     elapsedMs: response.elapsedMs,
@@ -293,25 +338,43 @@ function readJsonBody(request) {
 }
 
 function serveStatic(request, response) {
-  const url = new URL(request.url, `http://${request.headers.host}`);
-  const pathname = decodeURIComponent(url.pathname);
-  const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
+  let pathname = "";
+
+  try {
+    const rawPathname = String(request.url || "/").split(/[?#]/)[0] || "/";
+    pathname = decodeURIComponent(rawPathname);
+  } catch {
+    response.writeHead(400, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff"
+    });
+    return response.end("Bad request");
+  }
+
+  const relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const filePath = path.resolve(publicDir, relativePath);
 
-  if (!filePath.startsWith(publicDir)) {
-    response.writeHead(403);
+  if (!isInsideDir(publicDir, filePath)) {
+    response.writeHead(403, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff"
+    });
     return response.end("Forbidden");
   }
 
   fs.readFile(filePath, (error, data) => {
     if (error) {
-      response.writeHead(404);
+      response.writeHead(404, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff"
+      });
       return response.end("Not found");
     }
 
     response.writeHead(200, {
       "Content-Type": contentType(filePath),
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
     });
     response.end(data);
   });
@@ -320,9 +383,24 @@ function serveStatic(request, response) {
 function sendJson(response, payload, status = 200) {
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff"
   });
   response.end(JSON.stringify(payload, null, 2));
+}
+
+function isInsideDir(parentDir, childPath) {
+  const relative = path.relative(parentDir, childPath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function getStatusCode(error) {
+  if (error instanceof VersionError) {
+    return error.statusCode;
+  }
+
+  const statusCode = Number(error?.statusCode);
+  return Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 500;
 }
 
 function contentType(filePath) {

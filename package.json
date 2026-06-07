@@ -6,6 +6,6 @@
   "scripts": {
     "start": "node src/server.mjs",
     "ask": "node scripts/ask.mjs",
-    "check": "node --check src/config.mjs && node --check src/retriever.mjs && node --check src/claude-runner.mjs && node --check src/server.mjs && node --check scripts/ask.mjs"
+    "check": "node --check src/config.mjs && node --check src/version-registry.mjs && node --check src/retriever.mjs && node --check src/claude-runner.mjs && node --check src/server.mjs && node --check scripts/ask.mjs && node --check public/app.js"
   }
 }

@@ -5,6 +5,9 @@ const askButton = document.querySelector("#ask-button");
 const clearButton = document.querySelector("#clear-button");
 const operatorInput = document.querySelector("#operator-input");
 const operatorStatus = document.querySelector("#operator-status");
+const versionSelect = document.querySelector("#version-select");
+const versionStatus = document.querySelector("#version-status");
+const versionDescription = document.querySelector("#version-description");
 const runtimeStatus = document.querySelector("#runtime-status");
 const sourceList = document.querySelector("#source-list");
 const modelName = document.querySelector("#model-name");
@@ -21,17 +24,22 @@ const sessionCount = document.querySelector("#session-count");
 const newSessionButton = document.querySelector("#new-session-button");
 const currentSessionName = document.querySelector("#current-session-name");
 const contextBadge = document.querySelector("#context-badge");
+const currentVersionBadge = document.querySelector("#current-version-badge");
 
 const SESSION_STORAGE_KEY = "modelmate.sessions.v1";
 const CURRENT_SESSION_KEY = "modelmate.currentSessionId";
+const VERSION_STORAGE_KEY = "modelmate.selectedVersionId";
 const MAX_SESSIONS = 30;
 const MAX_STORED_MESSAGES = 80;
 const DEFAULT_HISTORY_MESSAGES = 8;
 
 let runtimeConfig = null;
+let versions = [];
+let selectedVersionId = window.localStorage.getItem(VERSION_STORAGE_KEY) || "";
 let sessions = loadSessions();
 let currentSessionId = window.localStorage.getItem(CURRENT_SESSION_KEY) || "";
 let hasMessages = false;
+let isSubmitting = false;
 
 ensureCurrentSession();
 operatorInput.value = window.localStorage.getItem("modelmate.operator") || "";
@@ -43,6 +51,11 @@ renderCurrentSession();
 operatorInput.addEventListener("input", () => {
   window.localStorage.setItem("modelmate.operator", operatorInput.value.trim());
   updateOperatorStatus();
+});
+
+versionSelect.addEventListener("change", () => {
+  setSelectedVersion(versionSelect.value, { persist: true });
+  flowStatus.textContent = selectedVersionId ? "待命" : "请选择版本";
 });
 
 newSessionButton.addEventListener("click", () => {
@@ -60,6 +73,14 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const question = questionInput.value.trim();
+  const version = getSelectedVersion();
+
+  if (!version) {
+    flowStatus.textContent = "请先选择版本";
+    versionSelect.focus();
+    return;
+  }
+
   if (!question) {
     questionInput.focus();
     return;
@@ -80,13 +101,14 @@ form.addEventListener("submit", async (event) => {
   questionInput.value = "";
   askButton.disabled = true;
   askButton.textContent = "处理中";
+  isSubmitting = true;
   flowStatus.textContent = "检索中";
 
   const pending = appendMessage("assistant", "助手", "正在检索本地资料...");
-  const processPanel = createProcessPanel(pending, { operator, question, historyCount: history.length });
+  const processPanel = createProcessPanel(pending, { operator, question, historyCount: history.length, version });
 
   try {
-    const payload = await askStreaming({ question, operator, history, message: pending, processPanel });
+    const payload = await askStreaming({ question, operator, history, versionId: version.id, message: pending, processPanel });
     addMessageToCurrentSession({
       role: "assistant",
       sender: "助手",
@@ -101,7 +123,8 @@ form.addEventListener("submit", async (event) => {
     updateMessage(pending, error.message || String(error));
     flowStatus.textContent = "异常";
   } finally {
-    askButton.disabled = false;
+    isSubmitting = false;
+    askButton.disabled = !getSelectedVersion();
     askButton.textContent = "发送";
     questionInput.focus();
   }
@@ -134,20 +157,13 @@ async function loadRuntimeConfig() {
     statusModel.textContent = config.displayModel || config.model || "Claude Code 默认";
     retrievalMode.textContent = config.retrievalMode || "-";
     toolList.textContent = config.allowedTools?.join(", ") || "-";
-    sourceCount.textContent = String(config.sourceDirs?.length || 0);
     contextWindow.textContent = [
       config.contextMaxChars ? `${config.contextMaxChars} chars` : "",
       config.historyMaxMessages ? `${config.historyMaxMessages} turns` : ""
     ].filter(Boolean).join(" / ") || "-";
     timeoutValue.textContent = config.timeoutMs ? `${Math.round(config.timeoutMs / 1000)}s` : "-";
     updateSessionHeader();
-
-    sourceList.innerHTML = "";
-    for (const sourceDir of config.sourceDirs || []) {
-      const item = document.createElement("li");
-      item.textContent = sourceDir;
-      sourceList.append(item);
-    }
+    await loadVersions(config.defaultVersionId);
 
     if (config.warnings?.length) {
       warningList.hidden = false;
@@ -157,7 +173,108 @@ async function loadRuntimeConfig() {
     runtimeStatus.textContent = "连接失败";
     warningList.hidden = false;
     warningList.textContent = error.message || String(error);
+    updateSelectedVersionUI();
   }
+}
+
+async function loadVersions(defaultVersionId) {
+  const response = await fetch("/api/versions");
+
+  if (!response.ok) {
+    throw new Error("版本列表加载失败。");
+  }
+
+  const payload = await response.json();
+  versions = Array.isArray(payload.versions) ? payload.versions : [];
+  const preferredVersionId = pickPreferredVersionId(defaultVersionId || payload.defaultVersionId);
+  renderVersionOptions();
+  setSelectedVersion(preferredVersionId, { persist: true });
+}
+
+function pickPreferredVersionId(defaultVersionId) {
+  if (selectedVersionId && versions.some((version) => version.id === selectedVersionId)) {
+    return selectedVersionId;
+  }
+
+  if (defaultVersionId && versions.some((version) => version.id === defaultVersionId)) {
+    return defaultVersionId;
+  }
+
+  return versions.find((version) => version.status === "active")?.id || versions[0]?.id || "";
+}
+
+function renderVersionOptions() {
+  versionSelect.innerHTML = "";
+
+  if (versions.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "暂无可用版本";
+    versionSelect.append(option);
+    return;
+  }
+
+  for (const version of versions) {
+    const option = document.createElement("option");
+    option.value = version.id;
+    option.textContent = `${version.name || version.id} · ${version.status || "active"}`;
+    versionSelect.append(option);
+  }
+}
+
+function setSelectedVersion(versionId, options = {}) {
+  selectedVersionId = String(versionId || "").trim();
+  versionSelect.value = selectedVersionId;
+
+  if (options.persist) {
+    window.localStorage.setItem(VERSION_STORAGE_KEY, selectedVersionId);
+  }
+
+  updateSelectedVersionUI();
+}
+
+function getSelectedVersion() {
+  return versions.find((version) => version.id === selectedVersionId) || null;
+}
+
+function updateSelectedVersionUI() {
+  const version = getSelectedVersion();
+
+  if (!version) {
+    versionStatus.textContent = "必选";
+    versionDescription.textContent = versions.length ? "请选择一个版本后再提问。" : "没有可用版本，请检查服务端配置。";
+    sourceCount.textContent = "0";
+    currentVersionBadge.textContent = "未选择版本";
+    sourceList.innerHTML = "";
+    askButton.disabled = true;
+    return;
+  }
+
+  versionStatus.textContent = version.status || "active";
+  versionDescription.textContent = version.description || "当前版本暂无描述。";
+  sourceCount.textContent = String(version.sourceCount || 0);
+  currentVersionBadge.textContent = version.name || version.id;
+  askButton.disabled = isSubmitting;
+  renderVersionSourceList(version);
+}
+
+function renderVersionSourceList(currentVersion) {
+  sourceList.innerHTML = "";
+
+  for (const version of versions) {
+    const item = document.createElement("li");
+    item.dataset.active = version.id === currentVersion.id ? "true" : "false";
+    item.innerHTML = `
+      <strong>${escapeHtml(version.name || version.id)}</strong>
+      <span>${escapeHtml(formatVersionMeta(version))}</span>
+    `;
+    sourceList.append(item);
+  }
+}
+
+function formatVersionMeta(version) {
+  const tags = Array.isArray(version.tags) && version.tags.length ? ` · ${version.tags.join(", ")}` : "";
+  return `${version.status || "active"} · ${version.sourceCount || 0} 个目录${tags}`;
 }
 
 function loadSessions() {
@@ -490,22 +607,23 @@ function renderEmptyState() {
 
 function formatMeta(payload) {
   const seconds = payload.elapsedMs ? `${(payload.elapsedMs / 1000).toFixed(1)}s` : "";
+  const version = payload.versionName || "";
   const quick = payload.quickReply ? "quick" : "";
   const turns = payload.claude?.numTurns ? `${payload.claude.numTurns} turns` : "";
   const models = payload.claude?.modelNames?.length ? payload.claude.modelNames.join(", ") : "";
   const cost = payload.claude?.totalCostUsd ? `$${payload.claude.totalCostUsd}` : "";
   const sources = payload.context?.usedFiles?.length ? `${payload.context.usedFiles.length} sources` : "";
   const history = payload.historyCount ? `${payload.historyCount} history` : "";
-  return [seconds, quick, models, turns, cost, sources, history].filter(Boolean).join(" / ");
+  return [seconds, version, quick, models, turns, cost, sources, history].filter(Boolean).join(" / ");
 }
 
-async function askStreaming({ question, operator, history, message, processPanel }) {
+async function askStreaming({ question, operator, history, versionId, message, processPanel }) {
   const response = await fetch("/api/ask-stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ question, operator, history })
+    body: JSON.stringify({ question, operator, history, versionId })
   });
 
   if (!response.ok) {
@@ -525,6 +643,7 @@ async function askStreaming({ question, operator, history, message, processPanel
     startedAt: Date.now(),
     processPanel,
     historyCount: history.length,
+    versionId,
     hasOutput: false
   };
   let buffer = "";
@@ -618,7 +737,7 @@ function handleStreamEvent(event, state, message) {
   }
 }
 
-function createProcessPanel(message, { operator, question, historyCount }) {
+function createProcessPanel(message, { operator, question, historyCount, version }) {
   const details = document.createElement("details");
   details.className = "process-panel";
   details.open = true;
@@ -637,6 +756,7 @@ function createProcessPanel(message, { operator, question, historyCount }) {
     message.append(details);
   }
   upsertProcessStep(details, "receive", "接收问题", `${operator} · ${truncateText(question, 42)}`, "done");
+  upsertProcessStep(details, "version", "版本路由", `${version.name || version.id} · ${version.sourceCount || 0} 个目录`, "done");
   upsertProcessStep(details, "history", "会话上下文", historyCount > 0 ? `已带入最近 ${historyCount} 条消息` : "当前会话暂无可带入历史", "done");
   return details;
 }
@@ -649,6 +769,10 @@ function updateProcessFromEvent(event, state) {
   }
 
   if (event.type === "start") {
+    if (event.versionName) {
+      upsertProcessStep(panel, "version", "版本路由", `${event.versionName} · ${event.versionId || ""}`, "done");
+    }
+
     if (event.historyCount > 0) {
       upsertProcessStep(panel, "history", "会话上下文", `已带入最近 ${event.historyCount} 条消息`, "done");
     }
@@ -665,7 +789,10 @@ function updateProcessFromEvent(event, state) {
   if (event.type === "status") {
     const message = event.message || "Claude Code 正在处理";
 
-    if (message.includes("检索")) {
+    if (message.includes("版本化")) {
+      upsertProcessStep(panel, "version", "版本路由", message, "done");
+      upsertProcessStep(panel, "claude", "Claude Code", "只读工具准备中", "active");
+    } else if (message.includes("检索")) {
       upsertProcessStep(panel, "retrieval", "本地检索", message, "active");
     } else if (message.includes("等待模型")) {
       upsertProcessStep(panel, "retrieval", "本地检索", "检索完成", "done");
@@ -685,12 +812,15 @@ function updateProcessFromEvent(event, state) {
   if (event.type === "context") {
     const context = event.context || {};
     const files = context.usedFiles || [];
+    const usesClaudeTools = runtimeConfig?.retrievalMode === "claude-tools";
     const detail = files.length
       ? `命中 ${files.length} 个来源：${files.map(shortPath).join("、")}`
-      : "本地知识库未命中，必要时将使用模型通用知识";
+      : usesClaudeTools
+        ? "已启用当前版本的 Claude Code 只读工具"
+        : "本地知识库未命中，必要时将使用模型通用知识";
 
-    upsertProcessStep(panel, "retrieval", "本地检索", detail, "done");
-    setProcessSummary(panel, files.length ? `命中 ${files.length} 个来源` : "本地未命中");
+    upsertProcessStep(panel, usesClaudeTools ? "claude-tools" : "retrieval", usesClaudeTools ? "只读工具" : "本地检索", detail, "done");
+    setProcessSummary(panel, files.length ? `命中 ${files.length} 个来源` : usesClaudeTools ? "只读工具已启用" : "本地未命中");
     return;
   }
 
@@ -833,7 +963,7 @@ function truncateText(value, maxLength) {
 }
 
 function shortPath(filePath) {
-  const parts = String(filePath || "").split("/");
+  const parts = String(filePath || "").split(/[\\/]/);
   return parts.slice(-2).join("/");
 }
 

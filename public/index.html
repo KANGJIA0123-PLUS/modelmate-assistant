@@ -23,6 +23,16 @@
           <p id="operator-status">用于问答记录</p>
         </section>
 
+        <section class="version-card panel-section" aria-label="版本选择">
+          <div class="section-head">
+            <h2>版本选择</h2>
+            <span id="version-status">必选</span>
+          </div>
+          <label for="version-select">当前版本</label>
+          <select id="version-select" name="versionId"></select>
+          <p id="version-description">正在加载版本...</p>
+        </section>
+
         <section class="panel-section session-section" aria-label="历史会话">
           <div class="section-head">
             <h2>历史会话</h2>
@@ -44,7 +54,7 @@
 
         <section class="panel-section">
           <div class="section-head">
-            <h2>知识源</h2>
+            <h2>版本知识源</h2>
             <span id="source-count">0</span>
           </div>
           <ul id="source-list" class="source-list"></ul>
@@ -89,6 +99,8 @@
               <span id="current-session-name">新会话</span>
               <span class="header-separator"></span>
               <span id="context-badge">上下文 0 条</span>
+              <span class="header-separator"></span>
+              <span id="current-version-badge">未选择版本</span>
             </p>
           </div>
           <div class="top-status">

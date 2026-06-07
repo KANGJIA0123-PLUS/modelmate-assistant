@@ -105,6 +105,7 @@ h1 {
 }
 
 .account-card,
+.version-card,
 .ops-card,
 .panel-section {
   display: grid;
@@ -112,6 +113,7 @@ h1 {
 }
 
 .account-card label,
+.version-card label,
 .section-head h2,
 .ops-label {
   color: var(--ink-soft);
@@ -119,7 +121,8 @@ h1 {
   font-weight: 680;
 }
 
-.account-card input {
+.account-card input,
+.version-card select {
   width: 100%;
   min-height: 40px;
   padding: 0 12px;
@@ -131,15 +134,33 @@ h1 {
 }
 
 .account-card input:focus,
+.version-card select:focus,
 textarea:focus {
   border-color: rgba(15, 118, 110, 0.52);
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
 }
 
-.account-card p {
+.account-card p,
+.version-card p {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.version-card {
+  padding: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff, #f6fbfa);
+}
+
+.version-card select {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 16px center / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 11px center / 6px 6px no-repeat,
+    var(--panel);
+  color: var(--ink);
 }
 
 .ops-card {
@@ -206,6 +227,8 @@ textarea:focus {
 }
 
 .source-list li {
+  display: grid;
+  gap: 4px;
   overflow-wrap: anywhere;
   padding: 10px 11px;
   border: 1px solid var(--line);
@@ -214,6 +237,22 @@ textarea:focus {
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.source-list li[data-active="true"] {
+  border-color: rgba(15, 118, 110, 0.38);
+  background: var(--accent-soft);
+}
+
+.source-list strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.source-list span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .session-section {

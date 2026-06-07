@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 import { retrieveLocalContext } from "./retriever.mjs";
 
-export async function askClaude(question, config, options = {}) {
+export async function askClaude(question, config, versionContext = null, options = {}) {
+  const scopedConfig = buildVersionScopedConfig(config, versionContext);
   const quickReply = getQuickReply(question);
   const startedAt = Date.now();
-  const history = normalizeHistory(options.history, config);
+  const history = normalizeHistory(options.history, scopedConfig);
 
   if (quickReply) {
     return {
@@ -17,14 +18,14 @@ export async function askClaude(question, config, options = {}) {
     };
   }
 
-  const context = config.retrievalMode === "claude-tools"
+  const context = scopedConfig.retrievalMode === "claude-tools"
     ? null
-    : await retrieveLocalContext(question, config);
-  const prompt = buildPrompt(question, config, context, history);
-  const args = buildClaudeArgs(prompt, config);
-  const { stdout, stderr, exitCode } = await runProcess(config.claudePath, args, {
-    cwd: config.workingDirectory,
-    timeoutMs: config.timeoutMs
+    : await retrieveLocalContext(question, scopedConfig);
+  const prompt = buildPrompt(question, scopedConfig, context, history, versionContext);
+  const args = buildClaudeArgs(prompt, scopedConfig);
+  const { stdout, stderr, exitCode } = await runProcess(scopedConfig.effectiveClaudePath, args, {
+    cwd: scopedConfig.workingDirectory,
+    timeoutMs: scopedConfig.timeoutMs
   });
 
   if (exitCode !== 0) {
@@ -43,13 +44,14 @@ export async function askClaude(question, config, options = {}) {
   };
 }
 
-export async function askClaudeStream(question, config, onEvent, options = {}) {
+export async function askClaudeStream(question, config, versionContext = null, onEvent, options = {}) {
+  const scopedConfig = buildVersionScopedConfig(config, versionContext);
   const quickReply = getQuickReply(question);
   const startedAt = Date.now();
-  const history = normalizeHistory(options.history, config);
+  const history = normalizeHistory(options.history, scopedConfig);
 
   if (history.length > 0) {
-    onEvent({ type: "history", count: history.length });
+    onEvent({ type: "history", count: history.length, versionId: versionContext?.id || "" });
   }
 
   if (quickReply) {
@@ -64,19 +66,24 @@ export async function askClaudeStream(question, config, onEvent, options = {}) {
     };
   }
 
-  onEvent({ type: "status", message: "正在检索本地资料..." });
-  const context = config.retrievalMode === "claude-tools"
+  onEvent({
+    type: "status",
+    versionId: versionContext?.id || "",
+    message: scopedConfig.retrievalMode === "claude-tools" ? "正在准备版本化只读工具..." : "正在检索当前版本资料..."
+  });
+  const context = scopedConfig.retrievalMode === "claude-tools"
     ? null
-    : await retrieveLocalContext(question, config);
-  onEvent({ type: "context", context: summarizeContext(context) });
-  onEvent({ type: "status", message: "已交给 Claude Code，等待模型首个输出..." });
+    : await retrieveLocalContext(question, scopedConfig);
+  onEvent({ type: "context", versionId: versionContext?.id || "", context: summarizeContext(context) });
+  onEvent({ type: "status", versionId: versionContext?.id || "", message: "已交给 Claude Code，等待模型首个输出..." });
 
-  const prompt = buildPrompt(question, config, context, history);
-  const args = buildClaudeArgs(prompt, config, { stream: true });
-  const result = await runStreamProcess(config.claudePath, args, {
-    cwd: config.workingDirectory,
-    timeoutMs: config.timeoutMs,
+  const prompt = buildPrompt(question, scopedConfig, context, history, versionContext);
+  const args = buildClaudeArgs(prompt, scopedConfig, { stream: true });
+  const result = await runStreamProcess(scopedConfig.effectiveClaudePath, args, {
+    cwd: scopedConfig.workingDirectory,
+    timeoutMs: scopedConfig.timeoutMs,
     signal: options.signal,
+    versionId: versionContext?.id || "",
     onEvent
   });
 
@@ -90,9 +97,10 @@ export async function askClaudeStream(question, config, onEvent, options = {}) {
   };
 }
 
-export function buildPrompt(question, config, context = null, history = []) {
+export function buildPrompt(question, config, context = null, history = [], versionContext = null) {
   const sourceList = config.sourceDirs.map((dir, index) => `${index + 1}. ${dir}`).join("\n");
   const normalizedHistory = normalizeHistory(history, config);
+  const versionBlock = formatVersionBlock(versionContext);
   const contextBlock = context
     ? [
         "本地预检索片段：",
@@ -105,8 +113,10 @@ export function buildPrompt(question, config, context = null, history = []) {
   return [
     "请作为现网接口人的知识助手回答下面的问题。",
     "",
+    versionBlock,
+    "",
     "知识源目录：",
-    sourceList,
+    sourceList || "没有可用知识源目录。",
     "",
     contextBlock,
     "",
@@ -114,15 +124,51 @@ export function buildPrompt(question, config, context = null, history = []) {
     "",
     "回答规则：",
     "1. 内部现网、接口、配置、日志、代码、流程类问题优先使用本地资料、Markdown 文档和代码仓中的事实。",
-    "2. 本地资料命中时，回答中尽量给出文件路径；能定位到代码或段落时，给出函数名、配置名、接口名或行号。",
-    "3. 本地资料没有命中时，如果问题属于通用知识、公开背景、概念解释或非内部信息，可以使用模型通用知识回答；开头用一句友好提示说明“本地知识库暂未命中，以下基于模型通用知识”。",
-    "4. 如果用户明确要求只根据本地资料、指定文档或指定代码回答，则不要使用模型通用知识；资料不足时说明缺什么。",
-    "5. 对涉及最新动态、公司内部事实、现网状态、法律、医疗、金融、安全等高风险或强时效问题，不要仅凭模型通用知识下确定结论，要提示用户补充资料或核验来源。",
-    "6. 不要修改、创建、删除文件；只做只读检索和阅读。",
-    "7. 回答使用中文，先给结论，再给依据和下一步建议。",
+    "2. 只能查阅和引用当前版本的知识源目录；不要跨版本混用资料、代码或历史经验。",
+    "3. 本地资料命中时，回答中尽量给出文件路径；能定位到代码或段落时，给出函数名、配置名、接口名或行号。",
+    "4. 当前版本资料没有命中时，如果问题属于通用知识、公开背景、概念解释或非内部信息，可以使用模型通用知识回答；开头用一句友好提示说明“当前版本知识库暂未命中，以下基于模型通用知识”。",
+    "5. 如果用户明确要求只根据本地资料、指定文档或指定代码回答，则不要使用模型通用知识；资料不足时说明缺什么。",
+    "6. 对涉及最新动态、公司内部事实、现网状态、法律、医疗、金融、安全等高风险或强时效问题，不要仅凭模型通用知识下确定结论，要提示用户补充资料或核验来源。",
+    "7. 不要修改、创建、删除文件；只做只读检索和阅读。",
+    "8. 回答使用中文，先给结论，再给依据和下一步建议。",
     "",
     "用户问题：",
     question
+  ].join("\n");
+}
+
+function buildVersionScopedConfig(config, versionContext) {
+  if (!versionContext) {
+    return {
+      ...config,
+      effectiveClaudePath: config.effectiveClaudePath || config.claudePath
+    };
+  }
+
+  return {
+    ...config,
+    workingDirectory: versionContext.workingDirectory || config.workingDirectory,
+    sourceDirs: Array.isArray(versionContext.sourceDirs) ? versionContext.sourceDirs : [],
+    effectiveClaudePath: config.effectiveClaudePath || config.claudePath
+  };
+}
+
+function formatVersionBlock(versionContext) {
+  if (!versionContext) {
+    return "当前版本：未指定版本。";
+  }
+
+  const tags = Array.isArray(versionContext.tags) && versionContext.tags.length > 0
+    ? versionContext.tags.join(", ")
+    : "无";
+
+  return [
+    "当前版本：",
+    `- versionId: ${versionContext.id}`,
+    `- versionName: ${versionContext.name}`,
+    `- status: ${versionContext.status}`,
+    `- tags: ${tags}`,
+    "版本边界：本次回答只能使用当前版本目录中的资料和代码；如果资料不足，请说明缺口。"
   ].join("\n");
 }
 
@@ -351,12 +397,12 @@ function runStreamProcess(command, args, options) {
         }
 
         if (parsed.type === "system" && parsed.subtype === "init") {
-          options.onEvent({ type: "meta", model: parsed.model, sessionId: parsed.session_id });
+          options.onEvent({ type: "meta", versionId: options.versionId || "", model: parsed.model, sessionId: parsed.session_id });
           continue;
         }
 
         if (parsed.type === "system" && parsed.subtype === "status") {
-          options.onEvent({ type: "status", message: formatStreamStatus(parsed.status) });
+          options.onEvent({ type: "status", versionId: options.versionId || "", message: formatStreamStatus(parsed.status) });
           continue;
         }
 
@@ -365,7 +411,7 @@ function runStreamProcess(command, args, options) {
           const delta = event.delta || {};
 
           if (event.type === "message_start") {
-            options.onEvent({ type: "meta", model: event.message?.model });
+            options.onEvent({ type: "meta", versionId: options.versionId || "", model: event.message?.model });
           }
 
           if (delta.type === "text_delta" && delta.text) {
@@ -378,7 +424,7 @@ function runStreamProcess(command, args, options) {
 
             if (now - lastThinkingStatusAt > 1500) {
               lastThinkingStatusAt = now;
-              options.onEvent({ type: "status", message: "模型正在思考..." });
+              options.onEvent({ type: "status", versionId: options.versionId || "", message: "模型正在思考..." });
             }
           }
 
