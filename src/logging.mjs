@@ -15,7 +15,7 @@ export function createQuestionLogger({ config, historyStore, insightStore }) {
 
     await appendQuestionLog(config.questionLogPath, entry);
     await recordQuestionHistory(historyStore, entry);
-    recordQuestionInsights(insightStore, entry);
+    await recordQuestionInsights(insightStore, entry);
     return entry;
   };
 }
@@ -75,13 +75,13 @@ async function recordQuestionHistory(historyStore, entry) {
   }
 }
 
-function recordQuestionInsights(insightStore, entry) {
+async function recordQuestionInsights(insightStore, entry) {
   if (!insightStore.enabled) {
     return;
   }
 
   try {
-    recordInsightEntry(insightStore, entry);
+    await recordInsightEntry(insightStore, entry);
   } catch (error) {
     console.warn(`Warning: 洞察数据库写入失败：${error.message || String(error)}`);
   }

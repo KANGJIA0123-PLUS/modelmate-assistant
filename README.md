@@ -171,6 +171,8 @@ MODEL_MATE_SUPABASE_ORG_ID=...
 
 `SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件。数据洞察、报告、聚类、FAQ 候选和 Skill 候选仍暂时使用 SQLite，后续任务再迁移。
 
+洞察 Store 调用链已经支持 async-compatible store，方便后续接入 SupabaseInsightStore；当前默认实现仍是 SQLite。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

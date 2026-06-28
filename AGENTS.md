@@ -21,6 +21,9 @@
 - Supabase Store 只能在服务端创建 service client。
 - 新增 Store 必须提供 fake client 单测，不能依赖真实 Supabase 网络。
 - 默认 sqlite 行为必须有测试保护。
+- InsightStore 调用方必须使用 await，以兼容后续 Supabase/Python-backed store。
+- SQLite store 可以保持同步实现，但调用链必须 async-safe。
+- 报告任务 runner 不得产生 unhandled Promise rejection。
 - 默认运行行为必须保持本地 SQLite，不配置 Supabase 时项目仍能启动、测试通过。
 - 不要重造复杂 RAG 平台；默认使用 Claude Code 的只读工具检索当前版本目录。
 - 每个问答请求必须携带 versionId。
