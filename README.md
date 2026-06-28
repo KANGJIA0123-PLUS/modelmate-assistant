@@ -222,6 +222,18 @@ npm run migrate:supabase -- --execute --batch-size 100
 
 当前 schema 的部分主键仍是全局主键，所以迁移脚本面向单组织数据导入；多组织同名 `versionId`、`reportId` 或 `questionId` 需要后续 schema 升级。
 
+## TypeScript baseline
+
+当前只引入 TypeScript 共享类型和 `typecheck`。运行时代码仍然是 Node ESM `.mjs`，前端仍然是当前 vanilla HTML/CSS/JS。
+
+`src/types` 描述领域对象、API response/request 和 Store 契约；`test/types` 提供编译期类型测试。后续会逐步迁移 API contracts 和前端模块，不会一次性重写。
+
+```bash
+npm run typecheck
+```
+
+`npm run typecheck` 只检查 `src/types` 和 `test/types`，不编译现有 JS，也不改变 `npm start` 默认行为。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

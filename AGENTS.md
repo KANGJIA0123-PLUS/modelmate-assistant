@@ -8,6 +8,12 @@
 
 - 暂不做登录、鉴权、SSO、RBAC。
 - 允许逐步引入 TypeScript，但必须小步迁移，不得一次性重写现有前端。
+- TypeScript 迁移必须小步进行。
+- 本阶段 TypeScript 只能用于共享类型和契约，不得重写运行时代码。
+- 不得一次性把 src/*.mjs 或 public/*.js 改成 .ts。
+- 新增 public config 类型时不得包含 serviceRoleKey 或 orgId。
+- API 类型必须优先描述现有 response shape，不得为了类型好看而改 API。
+- TypeScript 类型里禁止使用 any，优先 unknown / Record<string, unknown>。
 - 暂不引入 React/Vue/Next，除非后续任务明确要求。
 - 当前 vanilla HTML/CSS/JS 前端可以先保留，后续可迁到 TypeScript module。
 - 允许新增 Supabase 作为数据底座，但默认 provider 必须仍然是 sqlite。

@@ -17,9 +17,13 @@
     "backfill:insights": "node scripts/backfill-insights.mjs",
     "cleanup:data": "node scripts/cleanup-data.mjs",
     "migrate:supabase": "node scripts/migrate-sqlite-to-supabase.mjs",
+    "typecheck": "tsc --noEmit",
     "check": "node scripts/check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }
