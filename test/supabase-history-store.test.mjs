@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createHistoryStore, SupabaseHistoryStore } from "../src/history-store.mjs";
+import { buildPublicConfig } from "../src/public-config.mjs";
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -113,6 +114,111 @@ test("SupabaseHistoryStore records ask_events with normalized history fields", a
   assert.equal(serialized.includes("service-role-secret"), false);
 });
 
+test("SupabaseHistoryStore uses configured schema for writes and reads", async () => {
+  const client = new FakeSupabaseClient();
+  const store = new SupabaseHistoryStore({}, {
+    database: supabaseDatabaseConfig({ schema: "assistant" }),
+    supabaseClient: client
+  });
+
+  await store.record(questionEntry({ versionId: "v1", question: "订单接口 500 怎么排查？" }));
+  await store.listHistory({ versionId: "v1", limit: 10 });
+  await store.listFrequent({ versionId: "v1", limit: 10 });
+  await store.listCategories({ versionId: "v1" });
+
+  assert.equal(client.calls.length > 0, true);
+  assert.equal(client.calls.every((call) => call.schema === "assistant"), true);
+  assert.equal(client.calls.some((call) => call.table === "ask_events"), true);
+});
+
+test("SupabaseHistoryStore uses public schema when schema is omitted or public", async () => {
+  const omittedSchemaClient = new FakeSupabaseClient();
+  const omittedSchemaStore = new SupabaseHistoryStore({}, {
+    database: supabaseDatabaseConfig({ schema: undefined }),
+    supabaseClient: omittedSchemaClient
+  });
+  await omittedSchemaStore.record(questionEntry({ versionId: "v1", question: "订单接口 500 怎么排查？" }));
+
+  const publicSchemaClient = new FakeSupabaseClient();
+  const publicSchemaStore = new SupabaseHistoryStore({}, {
+    database: supabaseDatabaseConfig({ schema: "public" }),
+    supabaseClient: publicSchemaClient
+  });
+  await publicSchemaStore.record(questionEntry({ versionId: "v1", question: "订单接口 500 怎么排查？" }));
+
+  assert.equal(omittedSchemaClient.calls.length > 0, true);
+  assert.equal(omittedSchemaClient.calls.every((call) => call.schema === "public"), true);
+  assert.equal(publicSchemaClient.calls.length > 0, true);
+  assert.equal(publicSchemaClient.calls.every((call) => call.schema === "public"), true);
+});
+
+test("SupabaseHistoryStore redacts service role key from supabase errors", async () => {
+  const client = new FakeSupabaseClient({
+    errors: {
+      ask_events: {
+        message: "insert failed with service-role-secret"
+      }
+    }
+  });
+  const store = new SupabaseHistoryStore({}, {
+    database: supabaseDatabaseConfig(),
+    supabaseClient: client
+  });
+
+  await assert.rejects(
+    () => store.record(questionEntry({ versionId: "v1", question: "订单接口 500 怎么排查？" })),
+    (error) => {
+      assert.match(error.message, /Supabase ask_events 写入失败/);
+      assert.equal(error.message.includes("service-role-secret"), false);
+      assert.equal(error.message.includes("[redacted]"), true);
+      return true;
+    }
+  );
+});
+
+test("public config hides supabase service role key and org id", () => {
+  const publicConfig = buildPublicConfig({
+    config: {
+      host: "127.0.0.1",
+      port: 4878,
+      model: "",
+      claudeBare: false,
+      maxTurns: 8,
+      timeoutMs: 600000,
+      retrievalMode: "claude-tools",
+      contextMaxChars: 8000,
+      historyMaxMessages: 8,
+      historyMaxChars: 6000,
+      queue: { implementationStatus: "implemented" },
+      telemetry: {},
+      skills: {},
+      historyStore: { retentionDays: 180 },
+      insights: {},
+      warnings: [],
+      allowedTools: ["Read", "Glob", "Grep", "LS"],
+      disallowedTools: ["Edit", "MultiEdit", "Write", "NotebookEdit", "Bash", "WebFetch", "WebSearch"],
+      database: supabaseDatabaseConfig({ schema: "assistant" })
+    },
+    versionRegistry: {
+      getPublicDefaultVersionId: () => "default"
+    },
+    askQueue: {
+      getStats: () => ({ activeCount: 0, queuedCount: 0 })
+    },
+    historyStore: {
+      enabled: true
+    }
+  });
+  const serialized = JSON.stringify(publicConfig);
+
+  assert.equal(publicConfig.database.provider, "supabase");
+  assert.equal(publicConfig.database.supabase.schema, "assistant");
+  assert.equal("serviceRoleKey" in publicConfig.database.supabase, false);
+  assert.equal("orgId" in publicConfig.database.supabase, false);
+  assert.equal(serialized.includes("service-role-secret"), false);
+  assert.equal(serialized.includes(ORG_ID), false);
+});
+
 test("SupabaseHistoryStore list methods return sqlite-compatible payloads", async () => {
   const client = new FakeSupabaseClient();
   const store = new SupabaseHistoryStore({}, {
@@ -158,15 +264,24 @@ test("SupabaseHistoryStore list methods return sqlite-compatible payloads", asyn
   assert.ok(categories.items.some((item) => item.category === "知识文档" && item.questionCount === 1 && item.sourceCount === 2));
 });
 
-function supabaseDatabaseConfig() {
+function supabaseDatabaseConfig(overrides = {}) {
+  const supabase = {
+    url: "https://modelmate.example.supabase.co",
+    serviceRoleKey: "service-role-secret",
+    orgId: ORG_ID,
+    schema: "public",
+    ...overrides
+  };
+
+  for (const [key, value] of Object.entries(supabase)) {
+    if (value === undefined) {
+      delete supabase[key];
+    }
+  }
+
   return {
     provider: "supabase",
-    supabase: {
-      url: "https://modelmate.example.supabase.co",
-      serviceRoleKey: "service-role-secret",
-      orgId: ORG_ID,
-      schema: "public"
-    }
+    supabase
   };
 }
 
@@ -192,16 +307,28 @@ function questionEntry({ versionId, versionName = versionId, question, elapsedMs
 }
 
 class FakeSupabaseClient {
-  constructor() {
+  constructor(options = {}) {
     this.tables = {
       organizations: [],
       versions: [],
       ask_events: []
     };
     this.upserts = [];
+    this.calls = [];
+    this.errors = options.errors || {};
+  }
+
+  schema(schemaName) {
+    return {
+      from: (table) => {
+        this.calls.push({ schema: schemaName, table });
+        return new FakeSupabaseQuery(this, table);
+      }
+    };
   }
 
   from(table) {
+    this.calls.push({ schema: "public", table });
     return new FakeSupabaseQuery(this, table);
   }
 }
@@ -217,6 +344,12 @@ class FakeSupabaseQuery {
 
   upsert(row, options = {}) {
     this.client.upserts.push({ table: this.table, row, options });
+    const error = this.client.errors[this.table];
+
+    if (error) {
+      return { data: null, error };
+    }
+
     const rows = this.client.tables[this.table] || [];
     const keys = String(options.onConflict || "id").split(",").map((key) => key.trim()).filter(Boolean);
     const existingIndex = rows.findIndex((candidate) => keys.every((key) => candidate[key] === row[key]));
@@ -259,6 +392,12 @@ class FakeSupabaseQuery {
   }
 
   execute() {
+    const error = this.client.errors[this.table];
+
+    if (error) {
+      return { data: null, error };
+    }
+
     let rows = [...(this.client.tables[this.table] || [])];
 
     for (const filter of this.filters) {

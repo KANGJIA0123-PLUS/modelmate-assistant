@@ -102,6 +102,48 @@ test("SupabaseInsightStore.saveQuestion writes org, version, and questions once"
   assert.equal(JSON.stringify(fake.tables).includes("service-role-secret"), false);
 });
 
+test("SupabaseInsightStore uses public schema when schema is omitted or public", async () => {
+  const omittedSchemaFake = new FakeSupabaseClient();
+  const omittedSchemaStore = new SupabaseInsightStore({}, {
+    database: databaseConfig({ schema: undefined }),
+    supabaseClient: omittedSchemaFake
+  });
+  await omittedSchemaStore.saveReport(reportRecord());
+
+  const publicSchemaFake = new FakeSupabaseClient();
+  const publicSchemaStore = new SupabaseInsightStore({}, {
+    database: databaseConfig({ schema: "public" }),
+    supabaseClient: publicSchemaFake
+  });
+  await publicSchemaStore.saveReport(reportRecord());
+
+  assert.equal(omittedSchemaFake.calls.length > 0, true);
+  assert.equal(omittedSchemaFake.calls.every((call) => call.schema === "public"), true);
+  assert.equal(publicSchemaFake.calls.length > 0, true);
+  assert.equal(publicSchemaFake.calls.every((call) => call.schema === "public"), true);
+});
+
+test("SupabaseInsightStore redacts service role key from supabase errors", async () => {
+  const fake = new FakeSupabaseClient({
+    errors: {
+      insight_reports: {
+        message: "insert failed with service-role-secret"
+      }
+    }
+  });
+  const store = createStore(fake);
+
+  await assert.rejects(
+    () => store.saveReport(reportRecord()),
+    (error) => {
+      assert.match(error.message, /Supabase insight_reports 写入失败/);
+      assert.equal(error.message.includes("service-role-secret"), false);
+      assert.equal(error.message.includes("[redacted]"), true);
+      return true;
+    }
+  );
+});
+
 test("SupabaseInsightStore.upsertCluster merges repeated clusters", async () => {
   const fake = new FakeSupabaseClient();
   const store = createStore(fake);
@@ -237,22 +279,60 @@ test("SupabaseInsightStore supports reports, suggestions, candidates, llm runs, 
   assert.deepEqual((await store.listJobs({ status: "succeeded,failed" })).items.map((item) => item.id), ["job_2", "job_1"]);
 });
 
-function createStore(fake) {
+test("SupabaseInsightStore get list and update queries always filter by org id", async () => {
+  const fake = new FakeSupabaseClient();
+  const store = createStore(fake);
+
+  await store.listQuestions({ versionId: "v1" });
+  await store.listClusters({ versionId: "v1" });
+  await store.getOverview({ versionId: "v1" });
+  await store.listReports({ type: "weekly" });
+  await store.getReport("report_1");
+  await store.listSuggestions({ status: "open" });
+  await store.updateSuggestion("sug_1", { status: "done" });
+  await store.listFaqCandidates();
+  await store.listSkillCandidates();
+  await store.getJob("job_1");
+  await store.listJobs({ status: "queued,failed" });
+  await store.updateJob("job_1", { status: "failed" });
+
+  const queries = fake.queries.filter((query) => query.operation === "select" || query.operation === "update");
+  assert.equal(queries.length > 0, true);
+
+  for (const query of queries) {
+    assert.equal(
+      query.filters.some((filter) => filter.type === "eq" && filter.column === "org_id" && filter.value === ORG_ID),
+      true,
+      `${query.operation} ${query.table} should filter by org_id`
+    );
+  }
+});
+
+function createStore(fake, overrides = {}) {
   return new SupabaseInsightStore({}, {
-    database: databaseConfig(),
+    database: databaseConfig(overrides),
     supabaseClient: fake
   });
 }
 
-function databaseConfig() {
+function databaseConfig(overrides = {}) {
+  const supabase = {
+    url: "https://modelmate.example.supabase.co",
+    serviceRoleKey: "service-role-secret",
+    orgId: ORG_ID,
+    schema: "assistant",
+    ...overrides
+  };
+
+  for (const [key, value] of Object.entries(supabase)) {
+    if (value === undefined) {
+      delete supabase[key];
+    }
+  }
+
   return {
     provider: "supabase",
-    supabase: {
-      url: "https://modelmate.example.supabase.co",
-      serviceRoleKey: "service-role-secret",
-      orgId: ORG_ID,
-      schema: "assistant"
-    }
+    supabase
   };
 }
 
@@ -402,8 +482,10 @@ function jobRecord(overrides = {}) {
 }
 
 class FakeSupabaseClient {
-  constructor() {
+  constructor(options = {}) {
     this.calls = [];
+    this.queries = [];
+    this.errors = options.errors || {};
     this.tables = {
       organizations: [],
       versions: [],
@@ -511,6 +593,17 @@ class FakeQuery {
   }
 
   executeSelect() {
+    const error = this.client.errors[this.table];
+    this.client.queries.push({
+      table: this.table,
+      operation: "select",
+      filters: this.filters.map((filter) => ({ ...filter }))
+    });
+
+    if (error) {
+      return { data: null, error };
+    }
+
     let rows = this.filteredRows();
 
     for (const order of [...this.orders].reverse()) {
@@ -526,6 +619,18 @@ class FakeQuery {
   }
 
   executeUpsert() {
+    const error = this.client.errors[this.table];
+    this.client.queries.push({
+      table: this.table,
+      operation: "upsert",
+      filters: this.filters.map((filter) => ({ ...filter })),
+      row: { ...this.row }
+    });
+
+    if (error) {
+      return { data: null, error };
+    }
+
     const rows = this.client.tables[this.table] || [];
     const keys = String(this.options.onConflict || "id").split(",").map((key) => key.trim()).filter(Boolean);
     const existingIndex = rows.findIndex((row) => keys.every((key) => row[key] === this.row[key]));
@@ -541,6 +646,18 @@ class FakeQuery {
   }
 
   executeUpdate() {
+    const error = this.client.errors[this.table];
+    this.client.queries.push({
+      table: this.table,
+      operation: "update",
+      filters: this.filters.map((filter) => ({ ...filter })),
+      row: { ...this.row }
+    });
+
+    if (error) {
+      return { data: null, error };
+    }
+
     const rows = this.client.tables[this.table] || [];
 
     for (let index = 0; index < rows.length; index += 1) {

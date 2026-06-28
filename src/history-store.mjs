@@ -82,8 +82,19 @@ export class SupabaseHistoryStore {
     this.enabled = true;
     this.config = config;
     this.database = options.database || {};
-    this.orgId = validateSupabaseHistoryConfig(this.database);
+    const supabase = validateSupabaseHistoryConfig(this.database);
+    this.orgId = supabase.orgId;
+    this.schema = supabase.schema;
+    this.secrets = [supabase.serviceRoleKey].filter(Boolean);
     this.client = options.supabaseClient || createSupabaseServiceClient(this.database);
+  }
+
+  table(tableName) {
+    if (this.schema && this.schema !== "public" && typeof this.client.schema === "function") {
+      return this.client.schema(this.schema).from(tableName);
+    }
+
+    return this.client.from(tableName);
   }
 
   async record(entry) {
@@ -122,8 +133,8 @@ export class SupabaseHistoryStore {
   }
 
   async listHistory({ versionId, limit = DEFAULT_LIMIT, category = "" }) {
-    let query = this.client
-      .from("ask_events")
+    let query = this
+      .table("ask_events")
       .select("id, created_at, version_id, version_name, operator, question, answer_preview, category, elapsed_ms, quick_reply, history_message_count, source_count, model_names_json, num_turns, total_cost_usd")
       .eq("org_id", this.orgId)
       .eq("version_id", String(versionId || ""))
@@ -139,8 +150,8 @@ export class SupabaseHistoryStore {
   }
 
   async listFrequent({ versionId, limit = 10 }) {
-    const query = this.client
-      .from("ask_events")
+    const query = this
+      .table("ask_events")
       .select("created_at, question, normalized_question, question_hash, category, elapsed_ms, quick_reply")
       .eq("org_id", this.orgId)
       .eq("version_id", String(versionId || ""))
@@ -191,8 +202,8 @@ export class SupabaseHistoryStore {
   }
 
   async listCategories({ versionId }) {
-    const query = this.client
-      .from("ask_events")
+    const query = this
+      .table("ask_events")
       .select("created_at, category, elapsed_ms, source_count, quick_reply")
       .eq("org_id", this.orgId)
       .eq("version_id", String(versionId || ""))
@@ -254,10 +265,10 @@ export class SupabaseHistoryStore {
   }
 
   async upsert(table, row, options) {
-    const { error } = await this.client.from(table).upsert(row, options);
+    const { error } = await this.table(table).upsert(row, options);
 
     if (error) {
-      throw sanitizeSupabaseError(`Supabase ${table} 写入失败`, error);
+      throw sanitizeSupabaseError(`Supabase ${table} 写入失败`, error, this.secrets);
     }
   }
 
@@ -265,7 +276,7 @@ export class SupabaseHistoryStore {
     const { data, error } = await query;
 
     if (error) {
-      throw sanitizeSupabaseError(message, error);
+      throw sanitizeSupabaseError(message, error, this.secrets);
     }
 
     return Array.isArray(data) ? data : [];
@@ -628,6 +639,7 @@ function validateSupabaseHistoryConfig(database) {
   const url = String(supabase.url || "").trim();
   const serviceRoleKey = String(supabase.serviceRoleKey || "").trim();
   const orgId = String(supabase.orgId || "").trim();
+  const schema = String(supabase.schema || "public").trim() || "public";
 
   if (!url) {
     throw new Error("database.supabase.url is required when database.provider=supabase.");
@@ -641,11 +653,15 @@ function validateSupabaseHistoryConfig(database) {
     throw new Error("database.supabase.orgId is required when database.provider=supabase.");
   }
 
-  return orgId;
+  return { url, serviceRoleKey, orgId, schema };
 }
 
-function sanitizeSupabaseError(message, error) {
-  const detail = String(error?.message || error?.details || error?.hint || error?.code || "unknown error");
+function sanitizeSupabaseError(message, error, secrets = []) {
+  const rawDetail = [error?.message, error?.details, error?.hint, error?.code]
+    .filter(Boolean)
+    .map(String)
+    .join("；") || "unknown error";
+  const detail = secrets.reduce((text, secret) => secret ? text.split(secret).join("[redacted]") : text, rawDetail);
   return new Error(`${message}：${detail}`);
 }
 

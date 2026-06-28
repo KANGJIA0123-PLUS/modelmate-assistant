@@ -19,8 +19,11 @@
 - 新增 Supabase 表时，要考虑 versionId 隔离和 org_id 隔离。
 - 不得在前端暴露 Supabase service role key。
 - Supabase Store 只能在服务端创建 service client。
+- Supabase HistoryStore 和 InsightStore 必须保持 schema 行为一致。
 - Supabase service client 查询业务表时必须显式加 org_id 过滤，不能只依赖 RLS。
+- Supabase 错误信息不得泄露 serviceRoleKey。
 - 新增 Store 必须提供 fake client 单测，不能依赖真实 Supabase 网络。
+- 新增 Supabase Store 测试必须覆盖 public schema 和非 public schema。
 - SupabaseInsightStore 必须用 fake client 覆盖读写路径，返回结构必须兼容现有 SQLite store。
 - 默认 sqlite 行为必须有测试保护。
 - InsightStore 调用方必须使用 await，以兼容后续 Supabase/Python-backed store。

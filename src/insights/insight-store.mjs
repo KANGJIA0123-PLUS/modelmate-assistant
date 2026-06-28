@@ -1769,7 +1769,10 @@ function validateSupabaseInsightConfig(database) {
 }
 
 function sanitizeSupabaseInsightError(message, error, secrets = []) {
-  const rawDetail = String(error?.message || error?.details || error?.hint || error?.code || "unknown error");
+  const rawDetail = [error?.message, error?.details, error?.hint, error?.code]
+    .filter(Boolean)
+    .map(String)
+    .join("；") || "unknown error";
   const detail = secrets.reduce((text, secret) => secret ? text.split(secret).join("[redacted]") : text, rawDetail);
   return new Error(`${message}：${detail}`);
 }

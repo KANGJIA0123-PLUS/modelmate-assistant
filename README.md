@@ -148,7 +148,7 @@ npm run doctor
 
 默认数据底座仍然是本地 SQLite，不配置 Supabase 时项目会继续按当前本地模式启动和测试。
 
-后续可以通过服务端环境变量 `MODEL_MATE_DATABASE_PROVIDER=supabase` 启用已迁移的 Supabase Store，并配套设置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID`。Supabase service role key 只能放在服务端环境变量中，不能进入 `public/`、前端 bundle、`/api/config` 或 `/api/versions`，也不要把真实 key 写入提交文件。
+后续可以通过服务端环境变量 `MODEL_MATE_DATABASE_PROVIDER=supabase` 启用已迁移的 Supabase Store，并配套设置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID`。`MODEL_MATE_SUPABASE_SCHEMA` 默认是 `public`；如果设置为非 public schema，HistoryStore 和 InsightStore 都会使用该 schema。Supabase service role key 只能放在服务端环境变量中，不能进入 `public/`、前端 bundle、`/api/config` 或 `/api/versions`，也不要把真实 key 写入提交文件。
 
 当前已迁移的 Supabase Store 覆盖历史问答 `ask_events`，以及洞察、报告、建议/候选、LLM run 和报告任务表；默认运行行为仍然是 SQLite。
 
@@ -157,6 +157,8 @@ npm run doctor
 Supabase migration 位于 `supabase/migrations`。当前 migration 只是数据库 schema 预留，用于后续 SQLite 到 Supabase 的 Store 迁移。
 
 当前应用默认仍使用 SQLite；Supabase Store 目前覆盖历史问答和洞察相关表，其他数据层仍待后续迁移。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
+
+当前 migration 默认创建 `public` schema 下的表。使用非 public schema 前，需要确保对应 schema 中已经存在相同表结构。
 
 ## Supabase HistoryStore
 
@@ -167,9 +169,11 @@ MODEL_MATE_DATABASE_PROVIDER=supabase
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 MODEL_MATE_SUPABASE_ORG_ID=...
+# 可选，默认 public
+MODEL_MATE_SUPABASE_SCHEMA=public
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件。历史问答已支持 Supabase HistoryStore；洞察、报告、聚类、FAQ 候选和 Skill 候选默认仍使用 SQLite，配置 Supabase provider 后可切到 SupabaseInsightStore。
+`SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件；Supabase Store 报错时会对 service role key 做脱敏。历史问答已支持 Supabase HistoryStore；洞察、报告、聚类、FAQ 候选和 Skill 候选默认仍使用 SQLite，配置 Supabase provider 后可切到 SupabaseInsightStore。
 
 洞察 Store 调用链已经支持 async-compatible store；当前默认实现仍是 SQLite。
 
@@ -177,7 +181,7 @@ MODEL_MATE_SUPABASE_ORG_ID=...
 
 `SupabaseInsightStore` 已提供洞察、报告、建议、FAQ 候选、Skill 候选、LLM run 和报告任务表的服务端写入基线。默认 `database.provider` 仍然是 `sqlite`；只有服务端配置 `MODEL_MATE_DATABASE_PROVIDER=supabase`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID` 后，InsightStore 才会切到 Supabase。
 
-Supabase service role key 只能放在服务端环境变量中，不能进入前端、公开配置接口或提交文件。SupabaseInsightStore 的业务查询会显式按 `org_id` 过滤；当前接入不改变前端 UI、Claude Code 问答链路或默认 SQLite 运行行为。
+Supabase service role key 只能放在服务端环境变量中，不能进入前端、公开配置接口或提交文件；错误信息会脱敏。SupabaseInsightStore 的业务查询会显式按 `org_id` 过滤；当前接入不改变前端 UI、Claude Code 问答链路或默认 SQLite 运行行为。
 
 ## 当前边界
 
