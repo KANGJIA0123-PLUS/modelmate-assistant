@@ -183,6 +183,41 @@ MODEL_MATE_SUPABASE_SCHEMA=public
 
 Supabase service role key 只能放在服务端环境变量中，不能进入前端、公开配置接口或提交文件；错误信息会脱敏。SupabaseInsightStore 的业务查询会显式按 `org_id` 过滤；当前接入不改变前端 UI、Claude Code 问答链路或默认 SQLite 运行行为。
 
+## SQLite to Supabase migration
+
+一次性迁移脚本：
+
+```bash
+npm run migrate:supabase
+```
+
+默认是 dry-run，只读取 SQLite、构建迁移计划并输出 summary，不写入 Supabase。真正执行必须显式加 `--execute`：
+
+```bash
+npm run migrate:supabase -- --execute
+```
+
+执行迁移需要服务端环境变量：
+
+```bash
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+MODEL_MATE_SUPABASE_ORG_ID=...
+# 可选，默认 public
+MODEL_MATE_SUPABASE_SCHEMA=public
+```
+
+常用参数：
+
+```bash
+npm run migrate:supabase -- --db data/assistant.sqlite --tables ask_events,questions --json
+npm run migrate:supabase -- --execute --batch-size 100
+```
+
+迁移覆盖 `ask_events`、`questions`、`question_clusters`、`insight_reports`、`improvement_suggestions`、`faq_candidates`、`skill_candidates`、`insight_llm_runs` 和 `insight_jobs`，并会先 upsert `organizations` 和 `versions`。Supabase service role key 只能放服务端环境变量中，迁移 summary 不会输出原始 question/answer 内容。
+
+当前 schema 的部分主键仍是全局主键，所以迁移脚本面向单组织数据导入；多组织同名 `versionId`、`reportId` 或 `questionId` 需要后续 schema 升级。迁移前建议先备份 SQLite，并先 dry-run 确认行数后再 execute。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

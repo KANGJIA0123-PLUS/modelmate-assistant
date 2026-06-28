@@ -26,6 +26,11 @@
 - 新增 Supabase Store 测试必须覆盖 public schema 和非 public schema。
 - SupabaseInsightStore 必须用 fake client 覆盖读写路径，返回结构必须兼容现有 SQLite store。
 - 默认 sqlite 行为必须有测试保护。
+- 任何数据迁移脚本默认必须 dry-run。
+- 迁移 summary 不得输出原始 question/answer 内容。
+- 迁移脚本不得打印 serviceRoleKey、token 或本机敏感路径。
+- 迁移脚本必须支持幂等重复执行。
+- 迁移测试不得连接真实 Supabase。
 - InsightStore 调用方必须使用 await，以兼容后续 Supabase/Python-backed store。
 - SQLite store 可以保持同步实现，但调用链必须 async-safe。
 - 报告任务 runner 不得产生 unhandled Promise rejection。

@@ -16,6 +16,7 @@
     "test": "node --test test/*.test.mjs",
     "backfill:insights": "node scripts/backfill-insights.mjs",
     "cleanup:data": "node scripts/cleanup-data.mjs",
+    "migrate:supabase": "node scripts/migrate-sqlite-to-supabase.mjs",
     "check": "node scripts/check.mjs"
   },
   "dependencies": {
