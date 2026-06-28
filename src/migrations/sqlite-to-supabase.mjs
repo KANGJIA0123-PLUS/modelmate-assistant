@@ -21,7 +21,7 @@ const WRITE_ORDER = [
   ...MIGRATION_TABLES
 ];
 
-const CONFLICT_TARGETS = {
+export const MIGRATION_CONFLICT_TARGETS = {
   organizations: "id",
   versions: "id",
   ask_events: "org_id,event_key",
@@ -33,6 +33,18 @@ const CONFLICT_TARGETS = {
   skill_candidates: "id",
   insight_llm_runs: "id",
   insight_jobs: "id"
+};
+
+const REQUIRED_FIELDS = {
+  ask_events: ["event_key", "version_id"],
+  questions: ["id", "version_id"],
+  question_clusters: ["cluster_id", "version_id"],
+  insight_reports: ["report_id"],
+  improvement_suggestions: ["id"],
+  faq_candidates: ["id"],
+  skill_candidates: ["id"],
+  insight_llm_runs: ["id"],
+  insight_jobs: ["id"]
 };
 
 const MAPPERS = {
@@ -91,7 +103,7 @@ export function buildSqliteToSupabasePlan(source, options = {}) {
   const rowsByTable = {};
   const summary = createSummary({
     dryRun: options.dryRun !== false,
-    dbPath: source.dbPath,
+    dbPath: displayDbPath(source.dbPath, Boolean(options.showPaths)),
     schema,
     orgIdPresent: Boolean(orgId),
     warnings: source.warnings || []
@@ -100,13 +112,20 @@ export function buildSqliteToSupabasePlan(source, options = {}) {
   for (const table of MIGRATION_TABLES) {
     const rows = Array.isArray(source.tables?.[table]) ? source.tables[table] : [];
     const mapper = MAPPERS[table];
-    rowsByTable[table] = selectedTables.has(table) ? rows.map((row) => mapper(row, context)) : [];
+    const validRows = selectedTables.has(table) ? rows.filter((row) => hasRequiredFields(row, REQUIRED_FIELDS[table])) : [];
+    const skipped = selectedTables.has(table) ? rows.length - validRows.length : 0;
+    rowsByTable[table] = validRows.map((row) => mapper(row, context));
     summary.tables[table].read = rows.length;
     summary.tables[table].planned = rowsByTable[table].length;
+    summary.tables[table].skipped = skipped;
+
+    if (skipped > 0) {
+      summary.warnings.push(`${table} skipped ${skipped} rows with missing required fields`);
+    }
   }
 
   const organizations = orgId ? [{ id: orgId, name: "Default organization" }] : [];
-  const versions = collectVersions(source, selectedTables, orgId);
+  const versions = collectVersions(rowsByTable, selectedTables, orgId);
   summary.versions.planned = versions.length;
 
   return {
@@ -151,7 +170,7 @@ export async function migrateSqliteToSupabase(options = {}) {
       tableName: target,
       rows,
       batchSize,
-      onConflict: CONFLICT_TARGETS[target],
+      onConflict: MIGRATION_CONFLICT_TARGETS[target],
       secrets
     });
 
@@ -368,22 +387,22 @@ function cloneSummary(summary) {
   return JSON.parse(JSON.stringify(summary));
 }
 
-function collectVersions(source, selectedTables, orgId) {
+function collectVersions(rowsByTable, selectedTables, orgId) {
   if (!orgId) {
     return [];
   }
 
   const versions = new Map();
 
-  for (const row of selectedTables.has("ask_events") ? source.tables.ask_events || [] : []) {
+  for (const row of selectedTables.has("ask_events") ? rowsByTable.ask_events || [] : []) {
     addVersion(versions, row.version_id, row.version_name);
   }
 
-  for (const row of selectedTables.has("questions") ? source.tables.questions || [] : []) {
+  for (const row of selectedTables.has("questions") ? rowsByTable.questions || [] : []) {
     addVersion(versions, row.version_id, row.version_name);
   }
 
-  for (const row of selectedTables.has("question_clusters") ? source.tables.question_clusters || [] : []) {
+  for (const row of selectedTables.has("question_clusters") ? rowsByTable.question_clusters || [] : []) {
     addVersion(versions, row.version_id, row.version_name);
   }
 
@@ -495,6 +514,21 @@ function normalizeTableSelection(tables) {
 function normalizeBatchSize(value) {
   const number = Number(value || 100);
   return Number.isFinite(number) ? Math.max(1, Math.floor(number)) : 100;
+}
+
+function displayDbPath(dbPath, showPaths) {
+  const value = String(dbPath || "");
+
+  if (showPaths) {
+    return value;
+  }
+
+  const normalized = value.replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).pop() || "assistant.sqlite";
+}
+
+function hasRequiredFields(row, fields = []) {
+  return fields.every((field) => String(row?.[field] ?? "").trim());
 }
 
 function parseJsonValue(value, fallback) {

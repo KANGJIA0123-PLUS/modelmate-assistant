@@ -191,7 +191,7 @@ Supabase service role key 只能放在服务端环境变量中，不能进入前
 npm run migrate:supabase
 ```
 
-默认是 dry-run，只读取 SQLite、构建迁移计划并输出 summary，不写入 Supabase。真正执行必须显式加 `--execute`：
+默认是 dry-run，只读取 SQLite、构建迁移计划并输出 summary，不写入 Supabase。summary 默认会脱敏本机 `dbPath`，避免输出 `/Users/`、`/home/`、`/mnt/` 或 `C:\` 这类绝对路径。真正执行必须显式加 `--execute`：
 
 ```bash
 npm run migrate:supabase -- --execute
@@ -214,9 +214,13 @@ npm run migrate:supabase -- --db data/assistant.sqlite --tables ask_events,quest
 npm run migrate:supabase -- --execute --batch-size 100
 ```
 
+本地调试时可以加 `--show-paths` 查看真实 SQLite 路径；不要把带真实路径的输出贴到外部。
+
 迁移覆盖 `ask_events`、`questions`、`question_clusters`、`insight_reports`、`improvement_suggestions`、`faq_candidates`、`skill_candidates`、`insight_llm_runs` 和 `insight_jobs`，并会先 upsert `organizations` 和 `versions`。Supabase service role key 只能放服务端环境变量中，迁移 summary 不会输出原始 question/answer 内容。
 
-当前 schema 的部分主键仍是全局主键，所以迁移脚本面向单组织数据导入；多组织同名 `versionId`、`reportId` 或 `questionId` 需要后续 schema 升级。迁移前建议先备份 SQLite，并先 dry-run 确认行数后再 execute。
+缺少关键主键或版本字段的无效行会被 skipped，并在 summary 中计数；warnings 不包含原始问答内容。真正执行前建议先备份 SQLite、先 dry-run，并确认 skipped 数量为 0。
+
+当前 schema 的部分主键仍是全局主键，所以迁移脚本面向单组织数据导入；多组织同名 `versionId`、`reportId` 或 `questionId` 需要后续 schema 升级。
 
 ## 当前边界
 

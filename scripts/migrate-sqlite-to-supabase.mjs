@@ -23,7 +23,8 @@ try {
     dbPath: args.db || config.historyStore?.dbPath,
     database: config.database,
     batchSize: args.batchSize,
-    tables: args.tables
+    tables: args.tables,
+    showPaths: args.showPaths
   });
 
   if (args.json) {
@@ -43,7 +44,8 @@ function parseArgs(argv) {
     config: "",
     db: "",
     batchSize: 100,
-    tables: undefined
+    tables: undefined,
+    showPaths: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -63,6 +65,8 @@ function parseArgs(argv) {
       args.batchSize = Number(argv[++index] || 100);
     } else if (arg === "--tables") {
       args.tables = String(argv[++index] || "").split(",").map((table) => table.trim()).filter(Boolean);
+    } else if (arg === "--show-paths") {
+      args.showPaths = true;
     } else {
       throw new Error(`未知参数：${arg}`);
     }

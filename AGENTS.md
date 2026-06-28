@@ -29,6 +29,10 @@
 - 任何数据迁移脚本默认必须 dry-run。
 - 迁移 summary 不得输出原始 question/answer 内容。
 - 迁移脚本不得打印 serviceRoleKey、token 或本机敏感路径。
+- 迁移 summary 默认不得输出本机绝对路径。
+- 迁移脚本遇到缺少关键主键/外键的行时必须 skip 并计数，不得写入空主键。
+- 迁移 mapper 字段必须和 Supabase migration SQL 保持测试对齐。
+- upsert onConflict 字段必须和 migration SQL 的 primary key / unique 约束保持测试对齐。
 - 迁移脚本必须支持幂等重复执行。
 - 迁移测试不得连接真实 Supabase。
 - InsightStore 调用方必须使用 await，以兼容后续 Supabase/Python-backed store。

@@ -6,10 +6,13 @@ import path from "node:path";
 import test from "node:test";
 import {
   buildSqliteToSupabasePlan,
+  MIGRATION_CONFLICT_TARGETS,
   mapAskEventRow,
   mapFaqCandidateRow,
   mapJobRow,
+  mapLlmRunRow,
   mapQuestionRow,
+  mapQuestionClusterRow,
   mapReportRow,
   mapSkillCandidateRow,
   mapSuggestionRow,
@@ -18,6 +21,7 @@ import {
 } from "../src/migrations/sqlite-to-supabase.mjs";
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
+const MIGRATION_SQL_PATH = "supabase/migrations/202606280001_init_modelmate_assistant_schema.sql";
 
 test("migration mappers convert sqlite rows to supabase-safe rows", () => {
   const context = { orgId: ORG_ID };
@@ -185,6 +189,7 @@ test("dry-run reads sqlite and builds summary without writing supabase", async (
 
     assert.equal(client.upserts.length, 0);
     assert.equal(summary.dryRun, true);
+    assert.equal(summary.dbPath, "assistant.sqlite");
     assert.equal(summary.tables.ask_events.read, 2);
     assert.equal(summary.tables.questions.read, 1);
     assert.equal(summary.tables.insight_reports.read, 1);
@@ -192,6 +197,8 @@ test("dry-run reads sqlite and builds summary without writing supabase", async (
     assert.equal(summary.warnings.some((warning) => warning.includes("question_clusters")), true);
     assert.equal(summary.orgIdPresent, true);
     assert.equal(summary.versions.planned, 1);
+    assert.equal(serialized.includes(fixture.dbPath), false);
+    assert.equal(serialized.includes(path.dirname(fixture.dbPath)), false);
     assert.equal(serialized.includes("订单接口 500"), false);
     assert.equal(serialized.includes("answer preview"), false);
     assert.equal(serialized.includes("service-role-secret"), false);
@@ -235,6 +242,44 @@ test("execute writes batches in order and stays idempotent for clusters", async 
     assert.equal(second.tables.question_clusters.written, 1);
     assert.equal(first.tables.ask_events.written, 2);
     assert.equal(first.versions.written, 1);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("migration skips invalid rows and never writes empty required keys", async () => {
+  const fixture = await createInvalidSqliteFixture();
+  const client = new FakeSupabaseClient();
+
+  try {
+    const dryRunSummary = await migrateSqliteToSupabase({
+      dryRun: true,
+      dbPath: fixture.dbPath,
+      database: fakeDatabaseConfig()
+    });
+    const dryRunSerialized = JSON.stringify(dryRunSummary);
+
+    assert.equal(dryRunSummary.tables.ask_events.read, 2);
+    assert.equal(dryRunSummary.tables.ask_events.planned, 1);
+    assert.equal(dryRunSummary.tables.ask_events.skipped, 1);
+    assert.equal(dryRunSummary.tables.questions.read, 2);
+    assert.equal(dryRunSummary.tables.questions.planned, 1);
+    assert.equal(dryRunSummary.tables.questions.skipped, 1);
+    assert.equal(dryRunSummary.warnings.some((warning) => warning === "ask_events skipped 1 rows with missing required fields"), true);
+    assert.equal(dryRunSummary.warnings.some((warning) => warning === "questions skipped 1 rows with missing required fields"), true);
+    assert.equal(dryRunSerialized.includes("INVALID SHOULD NOT LEAK"), false);
+    assert.equal(dryRunSerialized.includes("answer should not leak"), false);
+
+    const executeSummary = await migrateSqliteToSupabase({
+      dryRun: false,
+      dbPath: fixture.dbPath,
+      database: fakeDatabaseConfig(),
+      supabaseClient: client
+    });
+    assert.equal(executeSummary.tables.ask_events.written, 1);
+    assert.equal(executeSummary.tables.questions.written, 1);
+    assert.equal(client.tables.ask_events.some((row) => !row.event_key || !row.version_id), false);
+    assert.equal(client.tables.questions.some((row) => !row.id || !row.version_id), false);
   } finally {
     await fixture.cleanup();
   }
@@ -332,9 +377,45 @@ test("migration script and summary do not contain secret-like values", async () 
       dbPath: fixture.dbPath,
       database: fakeDatabaseConfig()
     });
-    assert.doesNotMatch(JSON.stringify(summary), /service-role-secret|sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+/);
+    assert.doesNotMatch(JSON.stringify(summary), /service-role-secret|sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+|\/Users\/|\/mnt\/|\/home\/|C:\\/);
   } finally {
     await fixture.cleanup();
+  }
+});
+
+test("migration upsert conflict targets match migration sql constraints", async () => {
+  const sql = await fs.readFile(path.resolve(MIGRATION_SQL_PATH), "utf8");
+
+  for (const [table, target] of Object.entries(MIGRATION_CONFLICT_TARGETS)) {
+    assert.equal(
+      sqlSupportsConflictTarget(sql, table, target),
+      true,
+      `${table} should support onConflict ${target}`
+    );
+  }
+});
+
+test("migration mapper fields exist in supabase migration tables", async () => {
+  const sql = await fs.readFile(path.resolve(MIGRATION_SQL_PATH), "utf8");
+  const fieldsByTable = {
+    ask_events: Object.keys(mapAskEventRow(mapperAskEventSample(), { orgId: ORG_ID })),
+    questions: Object.keys(mapQuestionRow(mapperQuestionSample(), { orgId: ORG_ID })),
+    question_clusters: Object.keys(mapQuestionClusterRow(mapperClusterSample(), { orgId: ORG_ID })),
+    insight_reports: Object.keys(mapReportRow(mapperReportSample(), { orgId: ORG_ID })),
+    improvement_suggestions: Object.keys(mapSuggestionRow(mapperSuggestionSample(), { orgId: ORG_ID })),
+    faq_candidates: Object.keys(mapFaqCandidateRow(mapperFaqSample(), { orgId: ORG_ID })),
+    skill_candidates: Object.keys(mapSkillCandidateRow(mapperSkillSample(), { orgId: ORG_ID })),
+    insight_llm_runs: Object.keys(mapLlmRunRow(mapperLlmRunSample(), { orgId: ORG_ID })),
+    insight_jobs: Object.keys(mapJobRow(mapperJobSample(), { orgId: ORG_ID }))
+  };
+
+  for (const [table, mapperFields] of Object.entries(fieldsByTable)) {
+    const sqlFields = parseCreateTableColumns(sql, table);
+    assert.equal(sqlFields.size > 0, true, `${table} should be parsed from migration SQL`);
+
+    for (const field of mapperFields) {
+      assert.equal(sqlFields.has(field), true, `${table} is missing mapper field ${field}`);
+    }
   }
 });
 
@@ -575,6 +656,405 @@ async function createSqliteFixture(options = {}) {
   return {
     dbPath,
     cleanup: () => fs.rm(dir, { recursive: true, force: true })
+  };
+}
+
+async function createInvalidSqliteFixture() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "modelmate-invalid-migration-"));
+  const dbPath = path.join(dir, "assistant.sqlite");
+  const db = new DatabaseSync(dbPath);
+
+  db.exec(`
+    CREATE TABLE ask_events (
+      event_key TEXT,
+      created_at TEXT,
+      version_id TEXT,
+      version_name TEXT,
+      operator TEXT,
+      question TEXT,
+      normalized_question TEXT,
+      question_hash TEXT,
+      answer_preview TEXT,
+      category TEXT,
+      elapsed_ms INTEGER,
+      quick_reply INTEGER,
+      history_message_count INTEGER,
+      source_count INTEGER,
+      model_names_json TEXT,
+      num_turns INTEGER,
+      total_cost_usd REAL
+    );
+    CREATE TABLE questions (
+      id TEXT,
+      created_at TEXT,
+      version_id TEXT,
+      version_name TEXT,
+      operator TEXT,
+      operator_hash TEXT,
+      question TEXT,
+      question_preview TEXT,
+      redacted_question TEXT,
+      normalized_question TEXT,
+      question_hash TEXT,
+      answer_preview TEXT,
+      answer_status TEXT,
+      knowledge_hit_status TEXT,
+      is_knowledge_gap INTEGER,
+      category_l1 TEXT,
+      category_l2 TEXT,
+      intent TEXT,
+      scenario TEXT,
+      is_version_related INTEGER,
+      is_platform_improvement_signal INTEGER,
+      elapsed_ms INTEGER,
+      queue_wait_ms INTEGER,
+      source_count INTEGER,
+      model_names_json TEXT,
+      num_turns INTEGER,
+      total_cost_usd REAL,
+      remote_address_hash TEXT,
+      user_agent_hash TEXT,
+      raw_event_json TEXT
+    );
+  `);
+  db.prepare(`
+    INSERT INTO ask_events (
+      event_key, created_at, version_id, version_name, operator, question,
+      normalized_question, question_hash, answer_preview, category, elapsed_ms,
+      quick_reply, history_message_count, source_count, model_names_json, num_turns,
+      total_cost_usd
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "",
+    "2026-06-07T00:00:00.000Z",
+    "v1",
+    "Version One",
+    "tester",
+    "INVALID SHOULD NOT LEAK",
+    "invalid",
+    "hash_invalid",
+    "answer should not leak",
+    "接口排障",
+    120,
+    0,
+    1,
+    0,
+    "[]",
+    1,
+    0.01
+  );
+  db.prepare(`
+    INSERT INTO ask_events (
+      event_key, created_at, version_id, version_name, operator, question,
+      normalized_question, question_hash, answer_preview, category, elapsed_ms,
+      quick_reply, history_message_count, source_count, model_names_json, num_turns,
+      total_cost_usd
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "event_valid",
+    "2026-06-08T00:00:00.000Z",
+    "v1",
+    "Version One",
+    "tester",
+    "有效问题",
+    "有效问题",
+    "hash_valid",
+    "有效答案",
+    "知识文档",
+    80,
+    0,
+    1,
+    0,
+    "[]",
+    1,
+    0.01
+  );
+  db.prepare(`
+    INSERT INTO questions (
+      id, created_at, version_id, version_name, operator, operator_hash,
+      question, question_preview, redacted_question, normalized_question,
+      question_hash, answer_preview, answer_status, knowledge_hit_status,
+      is_knowledge_gap, category_l1, category_l2, intent, scenario,
+      is_version_related, is_platform_improvement_signal, elapsed_ms,
+      queue_wait_ms, source_count, model_names_json, num_turns, total_cost_usd,
+      remote_address_hash, user_agent_hash, raw_event_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "",
+    "2026-06-07T00:00:00.000Z",
+    "v1",
+    "Version One",
+    "tester",
+    "operator_hash",
+    "INVALID SHOULD NOT LEAK",
+    "INVALID SHOULD NOT LEAK",
+    "INVALID SHOULD NOT LEAK",
+    "invalid",
+    "hash_invalid",
+    "answer should not leak",
+    "answered",
+    "full",
+    0,
+    "code_logic",
+    "api_debugging",
+    "debug",
+    "api",
+    1,
+    0,
+    120,
+    5,
+    2,
+    "[]",
+    1,
+    0.01,
+    "remote_hash",
+    "ua_hash",
+    "{}"
+  );
+  db.prepare(`
+    INSERT INTO questions (
+      id, created_at, version_id, version_name, operator, operator_hash,
+      question, question_preview, redacted_question, normalized_question,
+      question_hash, answer_preview, answer_status, knowledge_hit_status,
+      is_knowledge_gap, category_l1, category_l2, intent, scenario,
+      is_version_related, is_platform_improvement_signal, elapsed_ms,
+      queue_wait_ms, source_count, model_names_json, num_turns, total_cost_usd,
+      remote_address_hash, user_agent_hash, raw_event_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "q_valid",
+    "2026-06-08T00:00:00.000Z",
+    "v1",
+    "Version One",
+    "tester",
+    "operator_hash",
+    "有效问题",
+    "有效问题",
+    "有效问题",
+    "有效问题",
+    "hash_valid",
+    "有效答案",
+    "answered",
+    "full",
+    0,
+    "code_logic",
+    "api_debugging",
+    "debug",
+    "api",
+    1,
+    0,
+    120,
+    5,
+    2,
+    "[]",
+    1,
+    0.01,
+    "remote_hash",
+    "ua_hash",
+    "{}"
+  );
+  db.close();
+
+  return {
+    dbPath,
+    cleanup: () => fs.rm(dir, { recursive: true, force: true })
+  };
+}
+
+function sqlSupportsConflictTarget(sql, table, target) {
+  const fields = target.split(",").map((field) => field.trim());
+  const body = parseCreateTableBody(sql, table);
+
+  if (fields.length === 1) {
+    const line = body.split("\n").find((candidate) => candidate.trim().startsWith(`${fields[0]} `));
+    if (line && /\bprimary\s+key\b/i.test(line)) {
+      return true;
+    }
+  }
+
+  const targetPattern = fields.join("\\s*,\\s*");
+  return new RegExp(`\\bunique\\s*\\(\\s*${targetPattern}\\s*\\)`, "i").test(body);
+}
+
+function parseCreateTableColumns(sql, table) {
+  return new Set(parseCreateTableBody(sql, table)
+    .split("\n")
+    .map((line) => line.trim().replace(/,$/, ""))
+    .filter((line) => line && !/^(unique|primary|constraint|foreign|check)\b/i.test(line))
+    .map((line) => line.split(/\s+/)[0])
+    .filter(Boolean));
+}
+
+function parseCreateTableBody(sql, table) {
+  const match = new RegExp(`create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${table}\\s*\\(([\\s\\S]*?)\\);`, "i").exec(sql);
+  return match?.[1] || "";
+}
+
+function mapperAskEventSample() {
+  return {
+    event_key: "event_1",
+    created_at: "2026-06-07T00:00:00.000Z",
+    version_id: "v1",
+    version_name: "Version One",
+    operator: "tester",
+    operator_hash: "operator_hash",
+    question: "问题",
+    normalized_question: "问题",
+    question_hash: "hash_1",
+    answer_preview: "answer",
+    category: "接口排障",
+    elapsed_ms: 120,
+    quick_reply: 1,
+    history_message_count: 1,
+    source_count: 1,
+    model_names_json: "[]",
+    num_turns: 1,
+    total_cost_usd: 0.01
+  };
+}
+
+function mapperQuestionSample() {
+  return {
+    id: "q_1",
+    created_at: "2026-06-07T00:00:00.000Z",
+    version_id: "v1",
+    version_name: "Version One",
+    operator: "tester",
+    operator_hash: "operator_hash",
+    question: "问题",
+    question_preview: "问题",
+    redacted_question: "问题",
+    normalized_question: "问题",
+    question_hash: "hash_1",
+    answer_preview: "answer",
+    answer_status: "answered",
+    knowledge_hit_status: "full",
+    is_knowledge_gap: 0,
+    category_l1: "code_logic",
+    category_l2: "api_debugging",
+    intent: "debug",
+    scenario: "api",
+    is_version_related: 1,
+    is_platform_improvement_signal: 0,
+    elapsed_ms: 120,
+    queue_wait_ms: 5,
+    source_count: 2,
+    model_names_json: "[]",
+    num_turns: 1,
+    total_cost_usd: 0.01,
+    remote_address_hash: "remote_hash",
+    user_agent_hash: "ua_hash",
+    raw_event_json: "{}"
+  };
+}
+
+function mapperClusterSample() {
+  return {
+    cluster_id: "cluster_1",
+    version_id: "v1",
+    title: "接口排查",
+    representative_question: "问题",
+    question_hash: "hash_1",
+    category_l1: "code_logic",
+    category_l2: "api_debugging",
+    question_count: 7,
+    first_seen_at: "2026-06-01T00:00:00.000Z",
+    last_seen_at: "2026-06-07T00:00:00.000Z",
+    versions_json: "[]",
+    sample_question_ids_json: "[]",
+    status: "open",
+    updated_at: "2026-06-07T00:00:00.000Z"
+  };
+}
+
+function mapperReportSample() {
+  return {
+    report_id: "report_1",
+    type: "weekly",
+    title: "周报",
+    version_id: "all",
+    range_start: "2026-06-01T00:00:00.000Z",
+    range_end: "2026-06-07T00:00:00.000Z",
+    status: "ready",
+    llm_enhanced: 0,
+    llm_status: "disabled",
+    generated_at: "2026-06-07T00:00:00.000Z",
+    report_json: "{}",
+    markdown: "# report",
+    metrics_json: "{}"
+  };
+}
+
+function mapperSuggestionSample() {
+  return {
+    id: "sug_1",
+    report_id: "report_1",
+    type: "platform",
+    title: "建议",
+    description: "描述",
+    priority: "P2",
+    priority_score: 2,
+    status: "open",
+    status_note: "",
+    related_cluster_ids_json: "[]",
+    evidence_json: "{}",
+    created_at: "2026-06-07T00:00:00.000Z",
+    updated_at: "2026-06-07T00:00:00.000Z"
+  };
+}
+
+function mapperFaqSample() {
+  return {
+    id: "faq_1",
+    report_id: "report_1",
+    cluster_id: "cluster_1",
+    question: "问题",
+    answer_summary: "回答",
+    evidence_json: "{}",
+    status: "open",
+    created_at: "2026-06-07T00:00:00.000Z",
+    updated_at: "2026-06-07T00:00:00.000Z"
+  };
+}
+
+function mapperSkillSample() {
+  return {
+    id: "skill_1",
+    report_id: "report_1",
+    title: "Skill",
+    trigger_scenario: "场景",
+    input_summary: "输入",
+    output_summary: "输出",
+    evidence_json: "{}",
+    status: "open",
+    created_at: "2026-06-07T00:00:00.000Z",
+    updated_at: "2026-06-07T00:00:00.000Z"
+  };
+}
+
+function mapperLlmRunSample() {
+  return {
+    id: "llm_1",
+    purpose: "report",
+    input_hash: "hash",
+    status: "success",
+    elapsed_ms: 30,
+    model_names_json: "[]",
+    error_message: "",
+    created_at: "2026-06-07T00:00:00.000Z"
+  };
+}
+
+function mapperJobSample() {
+  return {
+    id: "job_1",
+    type: "report_generation",
+    status: "queued",
+    payload_json: "{}",
+    result_json: "{}",
+    error_message: "",
+    created_at: "2026-06-07T00:00:00.000Z",
+    updated_at: "2026-06-07T00:00:00.000Z"
   };
 }
 
