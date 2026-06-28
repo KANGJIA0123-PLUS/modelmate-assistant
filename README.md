@@ -254,6 +254,14 @@ npm run typecheck
 
 这一步不改变 UI，只把 API endpoint、query 参数和错误解析集中到 `public/api.js`。`fetchJson` 仍保留，用于后续渐进迁移其他模块。
 
+## Frontend safety baseline
+
+UI 改版前已经增加 DOM 安全、API 边界、流式输出安全的静态测试。
+
+动态文本进入 `innerHTML` 前必须 escape。模型流式输出必须通过 `textContent` 路径更新。`insights-ui.js` 和 `reports-ui.js` 应通过 `public/api.js` typed wrappers 访问 API。
+
+后续三栏工作台改版必须保持这些测试通过。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

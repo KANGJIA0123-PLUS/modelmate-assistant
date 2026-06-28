@@ -28,6 +28,14 @@
 - 不要在 UI 模块里手写重复的 API endpoint 字符串。
 - 新增 API wrapper 后，应逐步迁移调用方，但不得顺手改 UI。
 - reports-ui.js 和 insights-ui.js 不应直接调用 fetchJson，除非后续任务明确要求。
+- 前端 UI 改版前必须先保护 DOM 安全边界。
+- 用户输入、模型输出、API 返回文本不得直接拼入 innerHTML。
+- 可以用 innerHTML 渲染静态模板，但动态文本必须 escape。
+- 流式输出必须通过 textContent 或等价安全路径更新。
+- UI 模块不得重新手写 API endpoint，优先使用 public/api.js typed wrappers。
+- 新增前端模块时必须避免 innerHTML +=、insertAdjacentHTML、document.write、eval、new Function。
+- 修改 chat-stream.js 时必须保证 delta 文本不直接进入 innerHTML。
+- 后续视觉改版不得删除这些安全测试。
 - 不得一次性重写 UI 或迁移到 React/Vue/Next，除非后续任务明确要求。
 - 暂不引入 React/Vue/Next，除非后续任务明确要求。
 - 当前 vanilla HTML/CSS/JS 前端可以先保留，后续可迁到 TypeScript module。
