@@ -262,6 +262,22 @@ UI 改版前已经增加 DOM 安全、API 边界、流式输出安全的静态�
 
 后续三栏工作台改版必须保持这些测试通过。
 
+## Frontend three-column workspace baseline
+
+前端 app shell 已从 2 栏调整为 3 栏工作台结构。
+
+左侧 `side-panel` 聚焦品牌、新建会话和历史会话导航；中间 `workspace` 保留问答和数据洞察主工作区；右侧 `context-panel` 承载使用人账号、版本选择、运行状态、能力状态、版本知识源、运行边界和 warning list。
+
+本阶段只调整结构，不做完整视觉改版。后续视觉精修会继续基于这个三栏结构推进，并保持 DOM 安全、API 边界和流式输出安全测试通过。
+
+## Frontend MCP / tooling
+
+前端高级化推荐优先使用 Context7、Playwright MCP 和 Chrome DevTools MCP：Context7 用于查最新文档，Playwright MCP 用于本地浏览器验收，Chrome DevTools MCP 用于 console、network、performance 和 DOM 调试。
+
+Figma MCP 仅在有正式设计稿时启用。shadcn MCP 暂不启用，因为当前项目不是 React/shadcn 架构，避免偏离 vanilla 前端和小步迁移策略。
+
+具体说明见 `docs/frontend-tooling-mcp.md`。不得提交真实 token、MCP 本机配置或本机私有配置到仓库。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

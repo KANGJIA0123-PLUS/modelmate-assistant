@@ -36,6 +36,20 @@
 - 新增前端模块时必须避免 innerHTML +=、insertAdjacentHTML、document.write、eval、new Function。
 - 修改 chat-stream.js 时必须保证 delta 文本不直接进入 innerHTML。
 - 后续视觉改版不得删除这些安全测试。
+- app shell 后续默认采用 side-panel、workspace、context-panel 三栏结构。
+- 左侧 side-panel 主要放会话导航，不再堆叠全部配置。
+- 右侧 context-panel 放版本、运行边界、source、capability 等上下文信息。
+- 修改布局时必须保留现有关键 id，避免破坏 app.js 选择器。
+- 后续视觉改版不得绕过 frontend-dom-safety / frontend-api-boundary / frontend-stream-safety 测试。
+- 移动端必须优先保证 workspace 和 ask-form 可用。
+- 前端高级化优先使用 Context7 查最新文档。
+- UI 改版验收优先使用 Playwright/Chrome DevTools MCP 做本地页面 smoke check。
+- 不得自动引入 shadcn/ui、React、Next 或组件库，除非后续任务明确要求。
+- 不得提交真实 MCP 配置、token、service role key。
+- 不得把 ~/.codex/config.toml、Claude Desktop 配置、Cursor 本机配置提交到仓库。
+- MCP 只能用于本地开发和测试数据，不得连接生产后台。
+- 若使用 Figma MCP，必须只读取被授权设计文件，不得把 token 写入仓库。
+- 新增 MCP/tooling 文档必须有静态测试保护敏感信息。
 - 不得一次性重写 UI 或迁移到 React/Vue/Next，除非后续任务明确要求。
 - 暂不引入 React/Vue/Next，除非后续任务明确要求。
 - 当前 vanilla HTML/CSS/JS 前端可以先保留，后续可迁到 TypeScript module。
