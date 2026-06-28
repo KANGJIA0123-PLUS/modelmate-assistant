@@ -3,9 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node src/server.mjs",
     "ask": "node scripts/ask.mjs",
-    "check": "node --check src/config.mjs && node --check src/version-registry.mjs && node --check src/retriever.mjs && node --check src/claude-runner.mjs && node --check src/server.mjs && node --check scripts/ask.mjs && node --check public/app.js"
+    "doctor": "node scripts/doctor.mjs",
+    "docker:start": "sh scripts/docker-start.sh",
+    "docker:package": "sh scripts/docker-package.sh",
+    "package:release": "sh scripts/release-package.sh",
+    "test": "node --test test/*.test.mjs",
+    "backfill:insights": "node scripts/backfill-insights.mjs",
+    "cleanup:data": "node scripts/cleanup-data.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.2"
   }
 }

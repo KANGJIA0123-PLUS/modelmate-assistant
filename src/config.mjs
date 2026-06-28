@@ -47,6 +47,7 @@ const DEFAULT_CONFIG = {
     supabase: {
       url: "",
       serviceRoleKey: "",
+      orgId: "",
       schema: "public"
     }
   },
@@ -254,6 +255,7 @@ function readEnvConfig() {
   assignNestedString(overrides, "database", "provider", env.MODEL_MATE_DATABASE_PROVIDER);
   assignDoubleNestedString(overrides, "database", "supabase", "url", env.SUPABASE_URL);
   assignDoubleNestedString(overrides, "database", "supabase", "serviceRoleKey", env.SUPABASE_SERVICE_ROLE_KEY);
+  assignDoubleNestedString(overrides, "database", "supabase", "orgId", env.MODEL_MATE_SUPABASE_ORG_ID);
   assignDoubleNestedString(overrides, "database", "supabase", "schema", env.MODEL_MATE_SUPABASE_SCHEMA);
   assignNestedBoolean(overrides, "insights", "enabled", env.MODEL_MATE_INSIGHTS_ENABLED);
   assignNestedBoolean(overrides, "insights", "llmEnhanced", env.MODEL_MATE_INSIGHTS_LLM_ENABLED);
@@ -360,6 +362,7 @@ function normalizeDatabase(database) {
     supabase: {
       url: String(supabase.url || "").trim(),
       serviceRoleKey: String(supabase.serviceRoleKey || "").trim(),
+      orgId: String(supabase.orgId || "").trim(),
       schema: String(supabase.schema || DEFAULT_CONFIG.database.supabase.schema).trim() || DEFAULT_CONFIG.database.supabase.schema
     }
   };

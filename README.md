@@ -148,15 +148,28 @@ npm run doctor
 
 默认数据底座仍然是本地 SQLite，不配置 Supabase 时项目会继续按当前本地模式启动和测试。
 
-后续可以通过服务端环境变量 `MODEL_MATE_DATABASE_PROVIDER=supabase` 预留启用 Supabase，并配套设置 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。Supabase service role key 只能放在服务端环境变量中，不能进入 `public/`、前端 bundle、`/api/config` 或 `/api/versions`，也不要把真实 key 写入提交文件。
+后续可以通过服务端环境变量 `MODEL_MATE_DATABASE_PROVIDER=supabase` 启用已迁移的 Supabase Store，并配套设置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID`。Supabase service role key 只能放在服务端环境变量中，不能进入 `public/`、前端 bundle、`/api/config` 或 `/api/versions`，也不要把真实 key 写入提交文件。
 
-当前任务只是配置预留，不代表已经完成 Supabase Store 实现。
+当前 Supabase Store 只覆盖历史问答 `ask_events`，其他数据层仍按当前边界运行。
 
 ## Supabase migrations
 
 Supabase migration 位于 `supabase/migrations`。当前 migration 只是数据库 schema 预留，用于后续 SQLite 到 Supabase 的 Store 迁移。
 
-当前应用默认仍使用 SQLite；只有后续实现 Supabase Store 后，`MODEL_MATE_DATABASE_PROVIDER=supabase` 才能作为真实数据层使用。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
+当前应用默认仍使用 SQLite；本轮只迁移历史问答 Store，完整 Supabase 数据层仍待后续迁移。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
+
+## Supabase HistoryStore
+
+当前 Supabase 接入只覆盖历史问答 `ask_events`，默认仍使用 SQLite。启用 Supabase HistoryStore 需要在服务端配置：
+
+```bash
+MODEL_MATE_DATABASE_PROVIDER=supabase
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+MODEL_MATE_SUPABASE_ORG_ID=...
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件。数据洞察、报告、聚类、FAQ 候选和 Skill 候选仍暂时使用 SQLite，后续任务再迁移。
 
 ## 当前边界
 

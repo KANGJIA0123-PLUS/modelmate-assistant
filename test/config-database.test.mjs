@@ -18,6 +18,7 @@ test("defaults database provider to sqlite when database config is absent", asyn
     assert.equal(config.database.supabase.url, "");
     assert.equal(config.database.supabase.serviceRoleKey, "");
     assert.equal(config.database.supabase.schema, "public");
+    assert.equal(config.database.supabase.orgId, "");
   } finally {
     await fixture.cleanup();
   }
@@ -43,13 +44,15 @@ test("database environment variables override provider and supabase settings", a
       MODEL_MATE_DATABASE_PROVIDER: "supabase",
       SUPABASE_URL: "https://modelmate.example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-secret",
-      MODEL_MATE_SUPABASE_SCHEMA: "assistant"
+      MODEL_MATE_SUPABASE_SCHEMA: "assistant",
+      MODEL_MATE_SUPABASE_ORG_ID: "00000000-0000-0000-0000-000000000001"
     }, () => loadConfig());
 
     assert.equal(config.database.provider, "supabase");
     assert.equal(config.database.supabase.url, "https://modelmate.example.supabase.co");
     assert.equal(config.database.supabase.serviceRoleKey, "service-role-secret");
     assert.equal(config.database.supabase.schema, "assistant");
+    assert.equal(config.database.supabase.orgId, "00000000-0000-0000-0000-000000000001");
   } finally {
     await fixture.cleanup();
   }
@@ -101,7 +104,8 @@ test("public config does not expose supabase service role key", () => {
         supabase: {
           url: "https://modelmate.example.supabase.co",
           serviceRoleKey: "service-role-secret",
-          schema: "assistant"
+          schema: "assistant",
+          orgId: "00000000-0000-0000-0000-000000000001"
         }
       }
     },
@@ -122,8 +126,10 @@ test("public config does not expose supabase service role key", () => {
   assert.equal(publicConfig.database.supabase.url, "https://modelmate.example.supabase.co");
   assert.equal(publicConfig.database.supabase.schema, "assistant");
   assert.equal("serviceRoleKey" in publicConfig.database.supabase, false);
+  assert.equal("orgId" in publicConfig.database.supabase, false);
   assert.equal(serialized.includes("serviceRoleKey"), false);
   assert.equal(serialized.includes("service-role-secret"), false);
+  assert.equal(serialized.includes("00000000-0000-0000-0000-000000000001"), false);
 });
 
 async function createConfigFixture() {
@@ -161,7 +167,8 @@ function withConfigEnv(overrides, callback) {
     "MODEL_MATE_DATABASE_PROVIDER",
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "MODEL_MATE_SUPABASE_SCHEMA"
+    "MODEL_MATE_SUPABASE_SCHEMA",
+    "MODEL_MATE_SUPABASE_ORG_ID"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 

@@ -75,15 +75,15 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && pathname === "/api/history") {
-      return sendJson(response, handleHistoryQuery(requestUrl.searchParams));
+      return sendJson(response, await handleHistoryQuery(requestUrl.searchParams));
     }
 
     if (request.method === "GET" && pathname === "/api/frequent") {
-      return sendJson(response, handleFrequentQuery(requestUrl.searchParams));
+      return sendJson(response, await handleFrequentQuery(requestUrl.searchParams));
     }
 
     if (request.method === "GET" && pathname === "/api/categories") {
-      return sendJson(response, handleCategoryQuery(requestUrl.searchParams));
+      return sendJson(response, await handleCategoryQuery(requestUrl.searchParams));
     }
 
     if (await insightsRoutes(request, response, requestUrl) !== false) {
@@ -120,7 +120,9 @@ async function initializeHistoryStore() {
   }
 
   try {
-    return await createHistoryStore(config.historyStore);
+    return await createHistoryStore(config.historyStore, {
+      database: config.database
+    });
   } catch (error) {
     config.warnings.push(`历史数据库初始化失败：${error.message || String(error)}`);
     return createDisabledHistoryStore(error.message || String(error));
@@ -152,9 +154,9 @@ function publicConfig() {
   });
 }
 
-function handleHistoryQuery(searchParams) {
+async function handleHistoryQuery(searchParams) {
   const versionContext = versionRegistry.requireVersion(searchParams.get("versionId"));
-  const payload = historyStore.listHistory({
+  const payload = await historyStore.listHistory({
     versionId: versionContext.id,
     limit: searchParams.get("limit"),
     category: searchParams.get("category") || ""
@@ -167,9 +169,9 @@ function handleHistoryQuery(searchParams) {
   };
 }
 
-function handleFrequentQuery(searchParams) {
+async function handleFrequentQuery(searchParams) {
   const versionContext = versionRegistry.requireVersion(searchParams.get("versionId"));
-  const payload = historyStore.listFrequent({
+  const payload = await historyStore.listFrequent({
     versionId: versionContext.id,
     limit: searchParams.get("limit")
   });
@@ -181,9 +183,9 @@ function handleFrequentQuery(searchParams) {
   };
 }
 
-function handleCategoryQuery(searchParams) {
+async function handleCategoryQuery(searchParams) {
   const versionContext = versionRegistry.requireVersion(searchParams.get("versionId"));
-  const payload = historyStore.listCategories({
+  const payload = await historyStore.listCategories({
     versionId: versionContext.id
   });
 

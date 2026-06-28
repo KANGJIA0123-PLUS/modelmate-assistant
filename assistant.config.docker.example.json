@@ -67,6 +67,7 @@
     "supabase": {
       "url": "",
       "serviceRoleKey": "",
+      "orgId": "",
       "schema": "public"
     }
   },

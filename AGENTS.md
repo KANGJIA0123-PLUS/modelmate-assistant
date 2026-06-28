@@ -18,6 +18,9 @@
 - public 业务表必须启用 RLS。
 - 新增 Supabase 表时，要考虑 versionId 隔离和 org_id 隔离。
 - 不得在前端暴露 Supabase service role key。
+- Supabase Store 只能在服务端创建 service client。
+- 新增 Store 必须提供 fake client 单测，不能依赖真实 Supabase 网络。
+- 默认 sqlite 行为必须有测试保护。
 - 默认运行行为必须保持本地 SQLite，不配置 Supabase 时项目仍能启动、测试通过。
 - 不要重造复杂 RAG 平台；默认使用 Claude Code 的只读工具检索当前版本目录。
 - 每个问答请求必须携带 versionId。
