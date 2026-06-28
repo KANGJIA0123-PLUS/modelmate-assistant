@@ -1,18 +1,10 @@
 {
-  "host": "127.0.0.1",
+  "host": "0.0.0.0",
   "port": 4878,
   "claudePath": "claude",
-  "claudePathByPlatform": {
-    "darwin": "claude",
-    "linux": "claude",
-    "win32": "claude.cmd"
-  },
-  "claudeBare": false,
-  "workingDirectory": ".",
-  "questionLogPath": "data/question-log.jsonl",
-  "sourceDirs": [
-    "."
-  ],
+  "claudeBare": true,
+  "workingDirectory": "/knowledge/default",
+  "questionLogPath": "/app/data/question-log.jsonl",
   "retrievalMode": "claude-tools",
   "model": "",
   "maxTurns": 8,
@@ -26,16 +18,17 @@
   "versions": [
     {
       "id": "default",
-      "name": "默认版本",
-      "description": "当前项目和资料目录。复制配置后可改成真实业务版本，例如 v2.3、v2.4。",
-      "workingDirectory": ".",
+      "name": "默认知识库",
+      "description": "Docker 默认知识库。把资料放到 ./knowledge/default，代码仓放到 ./repos/default。",
+      "workingDirectory": "/knowledge/default",
       "sourceDirs": [
-        "."
+        "/knowledge/default",
+        "/repos/default"
       ],
       "status": "active",
       "tags": [
-        "local",
-        "demo"
+        "docker",
+        "default"
       ]
     }
   ],
@@ -65,8 +58,8 @@
   },
   "historyStore": {
     "enabled": true,
-    "dbPath": "data/assistant.sqlite",
-    "jsonlPath": "data/question-log.jsonl",
+    "dbPath": "/app/data/assistant.sqlite",
+    "jsonlPath": "/app/data/question-log.jsonl",
     "retentionDays": 180
   },
   "database": {
@@ -97,7 +90,7 @@
   "insights": {
     "enabled": true,
     "llmEnhanced": true,
-    "reportDir": "data/insight-reports",
+    "reportDir": "/app/data/insight-reports",
     "defaultRangeDays": 7,
     "topClusterLimit": 10,
     "samplePerCluster": 3,
