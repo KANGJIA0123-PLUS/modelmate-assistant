@@ -152,6 +152,12 @@ npm run doctor
 
 当前任务只是配置预留，不代表已经完成 Supabase Store 实现。
 
+## Supabase migrations
+
+Supabase migration 位于 `supabase/migrations`。当前 migration 只是数据库 schema 预留，用于后续 SQLite 到 Supabase 的 Store 迁移。
+
+当前应用默认仍使用 SQLite；只有后续实现 Supabase Store 后，`MODEL_MATE_DATABASE_PROVIDER=supabase` 才能作为真实数据层使用。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

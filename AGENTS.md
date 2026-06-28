@@ -14,6 +14,10 @@
 - 允许新增 Python worker 目录，但只有后续任务明确要求时才能创建。
 - Supabase service role key 只能在服务端使用，禁止进入 public/、前端 bundle、/api/config、/api/versions。
 - 所有业务表后续迁入 Supabase 时必须默认开启 RLS。
+- Supabase migration 必须避免真实密钥、真实 URL、真实业务数据。
+- public 业务表必须启用 RLS。
+- 新增 Supabase 表时，要考虑 versionId 隔离和 org_id 隔离。
+- 不得在前端暴露 Supabase service role key。
 - 默认运行行为必须保持本地 SQLite，不配置 Supabase 时项目仍能启动、测试通过。
 - 不要重造复杂 RAG 平台；默认使用 Claude Code 的只读工具检索当前版本目录。
 - 每个问答请求必须携带 versionId。
