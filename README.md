@@ -242,6 +242,12 @@ npm run typecheck
 
 后续可以逐步把更多前端模块纳入类型检查，但不会一次性重写 UI，也不会引入 React/Vue/Next/Vite。
 
+## Frontend typed API wrappers
+
+`public/api.js` 现在集中维护 API wrapper。这些 wrapper 只封装 endpoint、query、错误解析和 response 类型。
+
+当前 UI 仍可继续使用 `fetchJson`；后续会逐步切换到 typed wrappers。API 类型描述的是当前真实 response shape，不要为了类型好看改后端 response。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。

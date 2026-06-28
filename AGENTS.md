@@ -13,11 +13,17 @@
 - 不得一次性把 src/*.mjs 或 public/*.js 改成 .ts。
 - 新增 public config 类型时不得包含 serviceRoleKey 或 orgId。
 - API 类型必须优先描述现有 response shape，不得为了类型好看而改 API。
+- API 类型必须描述真实后端 response shape。
+- public API 类型优先使用 camelCase public shape。
+- 不要误用 Supabase/SQLite snake_case row shape。
 - TypeScript 类型里禁止使用 any，优先 unknown / Record<string, unknown>。
 - 前端 TypeScript 化必须优先从 API client 和类型契约开始。
 - public/*.js 可以用 JSDoc + @ts-check 逐步纳入类型检查。
 - 不得为了类型检查改变 API request/response shape。
 - public config 和前端 API 类型不得包含 serviceRoleKey、orgId 或其他服务端密钥字段。
+- 新增前端 API wrapper 时必须复用 fetchJson/getApiErrorMessage。
+- 不得打印完整错误 payload。
+- 不得为了类型改 API response shape，除非后续任务明确要求并同步前后端。
 - 不得一次性重写 UI 或迁移到 React/Vue/Next，除非后续任务明确要求。
 - 暂不引入 React/Vue/Next，除非后续任务明确要求。
 - 当前 vanilla HTML/CSS/JS 前端可以先保留，后续可迁到 TypeScript module。

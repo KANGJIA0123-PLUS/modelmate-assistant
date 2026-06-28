@@ -21,7 +21,7 @@ void postgresProvider;
 function renderStreamEvent(event: AskStreamEvent): string {
   switch (event.type) {
     case "start":
-      return event.requestId;
+      return event.requestId || event.jobId || "";
     case "queue":
       return String(event.position);
     case "history":
@@ -31,13 +31,13 @@ function renderStreamEvent(event: AskStreamEvent): string {
     case "context":
       return String(event.sourceCount);
     case "meta":
-      return event.versionId;
+      return event.versionId || "";
     case "delta":
       return event.text;
     case "done":
-      return event.answer;
+      return event.answer || event.payload?.answer || "";
     case "error":
-      return event.message;
+      return event.message || event.error || "";
     default: {
       const neverEvent: never = event;
       return neverEvent;

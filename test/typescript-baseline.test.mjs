@@ -109,9 +109,38 @@ test("public api client opts into ts-check and avoids server-only fields", () =>
   assert.match(source, /@typedef\s+\{import\("\.\.\/src\/types\/index\.js"\)\.PublicConfigResponse\}/);
   assert.match(source, /@returns\s+\{Promise<PublicConfigResponse>\}/);
   assert.match(source, /@template T/);
+  assert.match(source, /export async function fetchJson/);
+  assert.match(source, /export async function fetchInsightOverview/);
+  assert.match(source, /export async function fetchInsightFrequentQuestions/);
+  assert.match(source, /export async function fetchReports/);
+  assert.match(source, /export async function fetchReport/);
+  assert.match(source, /export async function fetchReportMarkdown/);
+  assert.match(source, /export async function generateInsightReport/);
+  assert.match(source, /export async function updateImprovementSuggestion/);
   assert.equal(source.includes("serviceRoleKey"), false);
   assert.equal(source.includes("orgId"), false);
   assert.equal(source.includes("token"), false);
+});
+
+test("api types describe public report response shapes with camelCase fields", () => {
+  const source = readText("src/types/api.ts");
+  const reportSummaryBlock = extractInterface(source, "PublicReportSummary");
+  const reportDetailBlock = extractInterface(source, "ReportDetailResponse");
+  const reportGenerateBlock = extractInterface(source, "ReportGenerateResponse");
+
+  assert.match(reportSummaryBlock, /reportId:/);
+  assert.match(reportSummaryBlock, /generatedAt:/);
+  assert.match(reportSummaryBlock, /metrics:/);
+  assert.equal(reportSummaryBlock.includes("report_id"), false);
+  assert.equal(reportSummaryBlock.includes("generated_at"), false);
+  assert.equal(reportSummaryBlock.includes("metrics_json"), false);
+  assert.match(reportDetailBlock, /reportId:/);
+  assert.match(reportDetailBlock, /markdown:/);
+  assert.equal(/\breport\s*:/.test(reportDetailBlock), false);
+  assert.match(reportGenerateBlock, /jobId:/);
+  assert.match(reportGenerateBlock, /job:/);
+  assert.equal(/\breportId\s*:/.test(reportGenerateBlock), false);
+  assert.equal(/\breport\s*:/.test(reportGenerateBlock), false);
 });
 
 test("sqlite to supabase question cluster mapper defines versions_json once", () => {

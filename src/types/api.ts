@@ -1,15 +1,8 @@
 import type {
   AssistantVersion,
   DatabaseProvider,
-  FaqCandidate,
-  ImprovementSuggestion,
-  InsightJob,
-  InsightReport,
   IsoTimestamp,
   JsonRecord,
-  QuestionCluster,
-  QuestionInsight,
-  SkillCandidate,
   VersionId
 } from "./domain.js";
 
@@ -58,6 +51,7 @@ export interface VersionsResponse {
 export interface AskRequest {
   versionId: VersionId;
   question: string;
+  operator?: string;
   history?: Array<{
     role: "user" | "assistant";
     content: string;
@@ -78,15 +72,33 @@ export interface AskResponse {
 }
 
 export type AskStreamEvent =
-  | { type: "start"; requestId: string; versionId: VersionId }
-  | { type: "queue"; position: number; activeCount?: number; queuedCount?: number }
-  | { type: "history"; enabled: boolean; recorded?: boolean }
+  | {
+      type: "start";
+      jobId?: string;
+      requestId?: string;
+      operator?: string;
+      versionId: VersionId;
+      versionName?: string;
+      historyCount?: number;
+      startedAt?: IsoTimestamp;
+    }
+  | {
+      type: "queue";
+      status?: string;
+      position?: number;
+      activeCount?: number;
+      queuedCount?: number;
+      maxConcurrent?: number;
+      queueWaitMs?: number;
+      message?: string;
+    }
+  | { type: "history"; enabled?: boolean; count?: number; recorded?: boolean; versionId?: VersionId }
   | { type: "status"; message: string; stage?: string }
-  | { type: "context"; sourceCount: number; sources?: Array<Record<string, unknown>> }
-  | { type: "meta"; versionId: VersionId; modelNames?: string[]; elapsedMs?: number }
+  | { type: "context"; sourceCount?: number; sources?: Array<Record<string, unknown>>; context?: JsonRecord; versionId?: VersionId }
+  | { type: "meta"; versionId?: VersionId; model?: string; modelNames?: string[]; sessionId?: string; elapsedMs?: number }
   | { type: "delta"; text: string }
-  | { type: "done"; answer: string; elapsedMs?: number }
-  | { type: "error"; message: string; code?: string };
+  | { type: "done"; answer?: string; elapsedMs?: number; payload?: AskResponse }
+  | { type: "error"; message?: string; error?: string; code?: string; statusCode?: number; retryAfterMs?: number; queue?: JsonRecord | null };
 
 export interface HistoryResponse {
   enabled: boolean;
@@ -142,49 +154,132 @@ export interface CategoryItem {
 }
 
 export interface InsightOverviewResponse {
-  enabled: boolean;
-  totalQuestions: number;
-  effectiveQuestions: number;
-  versionCount: number;
-  highFrequencyClusterCount: number;
-  avgElapsedMs: number;
-  failedQuestions: number;
-  knowledgeGapQuestions: number;
-  knowledgeHitQuestions: number;
-  platformSignals: number;
+  range: InsightRange;
+  versionId: VersionId | "all";
+  metrics: {
+    totalQuestions: number;
+    effectiveQuestions: number;
+    highFrequencyClusterCount: number;
+    knowledgeGapRate: number;
+    knowledgeHitRate: number;
+    repetitionRate: number;
+    avgElapsedMs: number;
+    avgQueueWaitMs: number;
+    failureRate: number;
+    aiOpportunityCount: number;
+  };
+  counts: {
+    failedQuestions: number;
+    knowledgeGapQuestions: number;
+    knowledgeHitQuestions: number;
+    repeatedQuestions: number;
+    platformSignals: number;
+    versionCount: number;
+  };
 }
 
 export interface InsightCategoriesResponse {
   enabled: boolean;
-  items: Array<{
-    category: string;
-    questionCount: number;
-    percentage?: number;
-  }>;
+  items: InsightCategoryItem[];
+}
+
+export interface InsightCategoryItem {
+  categoryL1: string;
+  categoryL1Name: string;
+  categoryL2: string;
+  categoryL2Name: string;
+  questionCount: number;
+  percent: number;
+  avgElapsedMs: number;
+  knowledgeGapCount: number;
 }
 
 export interface InsightFrequentQuestionsResponse {
   enabled: boolean;
-  items: QuestionCluster[];
+  items: InsightFrequentQuestionItem[];
+}
+
+export interface InsightFrequentQuestionItem {
+  clusterId: string;
+  title: string;
+  representativeQuestion: string;
+  questionCount: number;
+  categoryL1: string;
+  categoryL1Name: string;
+  categoryL2: string;
+  categoryL2Name: string;
+  versionId: VersionId;
+  firstSeenAt: IsoTimestamp;
+  lastSeenAt: IsoTimestamp;
+  trend: string;
+  answerStatus: string;
+  knowledgeHitStatus: string;
+  suggestedAction: string;
 }
 
 export interface InsightVersionsResponse {
   enabled: boolean;
-  items: Array<{
-    versionId: VersionId;
-    questionCount: number;
-    lastAskedAt?: IsoTimestamp;
-  }>;
+  items: InsightVersionItem[];
+}
+
+export interface InsightVersionItem {
+  versionId: VersionId;
+  versionName: string;
+  questionCount: number;
+  failureRate: number;
+  knowledgeGapRate: number;
+  avgElapsedMs: number;
 }
 
 export interface KnowledgeGapsResponse {
   enabled: boolean;
-  items: QuestionInsight[];
+  items: KnowledgeGapItem[];
+}
+
+export interface KnowledgeGapItem {
+  id: string;
+  clusterId: string;
+  title: string;
+  versionId: VersionId;
+  categoryL2: string;
+  reason: string;
+  questionCount: number;
+  lastSeenAt: IsoTimestamp;
+}
+
+export interface EfficiencyOpportunitiesResponse {
+  enabled: boolean;
+  items: EfficiencyOpportunityItem[];
+}
+
+export interface EfficiencyOpportunityItem {
+  type: string;
+  title: string;
+  description: string;
+  relatedClusterIds: string[];
+  questionCount: number;
+  priorityHint: string;
 }
 
 export interface ImprovementSuggestionsResponse {
   enabled: boolean;
-  items: ImprovementSuggestion[];
+  items: PublicImprovementSuggestion[];
+}
+
+export interface PublicImprovementSuggestion {
+  id: string;
+  reportId?: string | null;
+  type: string;
+  title: string;
+  description: string;
+  priority: string;
+  priorityScore: number;
+  status: string;
+  statusNote?: string | null;
+  relatedClusterIds: string[];
+  evidence: JsonRecord;
+  createdAt?: IsoTimestamp;
+  updatedAt?: IsoTimestamp;
 }
 
 export interface ReportGenerateRequest {
@@ -195,27 +290,84 @@ export interface ReportGenerateRequest {
 }
 
 export interface ReportGenerateResponse {
-  reportId: string;
-  report: InsightReport;
-  job?: InsightJob;
+  jobId: string;
+  job: PublicReportJob;
 }
 
 export interface ReportJobsResponse {
   enabled: boolean;
-  items: InsightJob[];
+  items: PublicReportJob[];
 }
 
 export interface ReportsResponse {
   enabled: boolean;
-  items: InsightReport[];
+  items: PublicReportSummary[];
 }
 
-export interface ReportDetailResponse {
-  enabled?: boolean;
-  report: InsightReport;
-  suggestions?: ImprovementSuggestion[];
-  faqCandidates?: FaqCandidate[];
-  skillCandidates?: SkillCandidate[];
+export interface ReportDetailResponse extends PublicReportDetail {
+  reportId: string;
+  markdown: string;
+}
+
+export interface PublicReportSummary {
+  reportId: string;
+  type: string;
+  title: string;
+  versionId: VersionId | "all";
+  rangeStart: IsoTimestamp;
+  rangeEnd: IsoTimestamp;
+  status: string;
+  llmEnhanced: boolean;
+  llmStatus: string;
+  generatedAt: IsoTimestamp;
+  metrics: JsonRecord;
+}
+
+export interface PublicReportDetail extends PublicReportSummary {
+  reportJson: JsonRecord;
+  markdown: string;
+}
+
+export interface PublicReportJob {
+  id: string;
+  type: string;
+  status: string;
+  payload: JsonRecord;
+  result: JsonRecord;
+  errorMessage?: string | null;
+  createdAt: IsoTimestamp;
+  updatedAt: IsoTimestamp;
+}
+
+export interface PublicFaqCandidate {
+  id: string;
+  reportId?: string | null;
+  clusterId?: string | null;
+  question: string;
+  answerSummary: string;
+  evidence: JsonRecord;
+  status: string;
+  createdAt?: IsoTimestamp;
+  updatedAt?: IsoTimestamp;
+}
+
+export interface PublicSkillCandidate {
+  id: string;
+  reportId?: string | null;
+  title: string;
+  triggerScenario: string;
+  inputSummary: string;
+  outputSummary: string;
+  evidence: JsonRecord;
+  status: string;
+  createdAt?: IsoTimestamp;
+  updatedAt?: IsoTimestamp;
+}
+
+export interface InsightRange {
+  label: string;
+  startAt: IsoTimestamp;
+  endAt: IsoTimestamp;
 }
 
 export interface ApiErrorResponse {
