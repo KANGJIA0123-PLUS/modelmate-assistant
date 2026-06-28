@@ -232,7 +232,15 @@ npm run migrate:supabase -- --execute --batch-size 100
 npm run typecheck
 ```
 
-`npm run typecheck` 只检查 `src/types` 和 `test/types`，不编译现有 JS，也不改变 `npm start` 默认行为。
+`npm run typecheck` 会检查共享契约和已纳入类型检查的前端 API client，不改变 `npm start` 默认行为。
+
+## Frontend API typecheck
+
+当前没有重写前端，`public/api.js` 仍然是浏览器原生 ES module。
+
+前端 API client 通过 JSDoc、`@ts-check` 和 `tsconfig.frontend.json` 做类型检查；`npm run typecheck` 会同时检查共享契约和 `public/api.js`。
+
+后续可以逐步把更多前端模块纳入类型检查，但不会一次性重写 UI，也不会引入 React/Vue/Next/Vite。
 
 ## 当前边界
 

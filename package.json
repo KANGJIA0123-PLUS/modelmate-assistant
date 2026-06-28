@@ -17,7 +17,9 @@
     "backfill:insights": "node scripts/backfill-insights.mjs",
     "cleanup:data": "node scripts/cleanup-data.mjs",
     "migrate:supabase": "node scripts/migrate-sqlite-to-supabase.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck:contracts": "tsc --noEmit",
+    "typecheck:frontend": "tsc -p tsconfig.frontend.json --noEmit",
+    "typecheck": "npm run typecheck:contracts && npm run typecheck:frontend",
     "check": "node scripts/check.mjs"
   },
   "dependencies": {
