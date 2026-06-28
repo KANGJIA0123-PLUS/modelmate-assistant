@@ -138,6 +138,8 @@ async function initializeInsightStore() {
     return await initInsightStore({
       ...config.insights,
       dbPath: config.historyStore?.dbPath
+    }, {
+      database: config.database
     });
   } catch (error) {
     config.warnings.push(`洞察数据库初始化失败：${error.message || String(error)}`);

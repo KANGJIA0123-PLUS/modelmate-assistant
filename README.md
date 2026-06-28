@@ -150,17 +150,17 @@ npm run doctor
 
 后续可以通过服务端环境变量 `MODEL_MATE_DATABASE_PROVIDER=supabase` 启用已迁移的 Supabase Store，并配套设置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID`。Supabase service role key 只能放在服务端环境变量中，不能进入 `public/`、前端 bundle、`/api/config` 或 `/api/versions`，也不要把真实 key 写入提交文件。
 
-当前 Supabase Store 只覆盖历史问答 `ask_events`，其他数据层仍按当前边界运行。
+当前已迁移的 Supabase Store 覆盖历史问答 `ask_events`，以及洞察、报告、建议/候选、LLM run 和报告任务表；默认运行行为仍然是 SQLite。
 
 ## Supabase migrations
 
 Supabase migration 位于 `supabase/migrations`。当前 migration 只是数据库 schema 预留，用于后续 SQLite 到 Supabase 的 Store 迁移。
 
-当前应用默认仍使用 SQLite；本轮只迁移历史问答 Store，完整 Supabase 数据层仍待后续迁移。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
+当前应用默认仍使用 SQLite；Supabase Store 目前覆盖历史问答和洞察相关表，其他数据层仍待后续迁移。业务表默认启用 RLS，Supabase service role key 只能由服务端使用，不能进入前端或公开配置接口。
 
 ## Supabase HistoryStore
 
-当前 Supabase 接入只覆盖历史问答 `ask_events`，默认仍使用 SQLite。启用 Supabase HistoryStore 需要在服务端配置：
+Supabase HistoryStore 覆盖历史问答 `ask_events`，默认仍使用 SQLite。启用 Supabase HistoryStore 需要在服务端配置：
 
 ```bash
 MODEL_MATE_DATABASE_PROVIDER=supabase
@@ -169,9 +169,15 @@ SUPABASE_SERVICE_ROLE_KEY=...
 MODEL_MATE_SUPABASE_ORG_ID=...
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件。数据洞察、报告、聚类、FAQ 候选和 Skill 候选仍暂时使用 SQLite，后续任务再迁移。
+`SUPABASE_SERVICE_ROLE_KEY` 只能由服务端使用，不能进入前端、公开配置接口或提交文件。历史问答已支持 Supabase HistoryStore；洞察、报告、聚类、FAQ 候选和 Skill 候选默认仍使用 SQLite，配置 Supabase provider 后可切到 SupabaseInsightStore。
 
-洞察 Store 调用链已经支持 async-compatible store，方便后续接入 SupabaseInsightStore；当前默认实现仍是 SQLite。
+洞察 Store 调用链已经支持 async-compatible store；当前默认实现仍是 SQLite。
+
+## Supabase InsightStore
+
+`SupabaseInsightStore` 已提供洞察、报告、建议、FAQ 候选、Skill 候选、LLM run 和报告任务表的服务端写入基线。默认 `database.provider` 仍然是 `sqlite`；只有服务端配置 `MODEL_MATE_DATABASE_PROVIDER=supabase`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `MODEL_MATE_SUPABASE_ORG_ID` 后，InsightStore 才会切到 Supabase。
+
+Supabase service role key 只能放在服务端环境变量中，不能进入前端、公开配置接口或提交文件。SupabaseInsightStore 的业务查询会显式按 `org_id` 过滤；当前接入不改变前端 UI、Claude Code 问答链路或默认 SQLite 运行行为。
 
 ## 当前边界
 
