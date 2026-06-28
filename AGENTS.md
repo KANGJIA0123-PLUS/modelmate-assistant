@@ -24,6 +24,10 @@
 - 新增前端 API wrapper 时必须复用 fetchJson/getApiErrorMessage。
 - 不得打印完整错误 payload。
 - 不得为了类型改 API response shape，除非后续任务明确要求并同步前后端。
+- 前端模块调用后端 API 时应优先使用 public/api.js typed wrappers。
+- 不要在 UI 模块里手写重复的 API endpoint 字符串。
+- 新增 API wrapper 后，应逐步迁移调用方，但不得顺手改 UI。
+- reports-ui.js 和 insights-ui.js 不应直接调用 fetchJson，除非后续任务明确要求。
 - 不得一次性重写 UI 或迁移到 React/Vue/Next，除非后续任务明确要求。
 - 暂不引入 React/Vue/Next，除非后续任务明确要求。
 - 当前 vanilla HTML/CSS/JS 前端可以先保留，后续可迁到 TypeScript module。

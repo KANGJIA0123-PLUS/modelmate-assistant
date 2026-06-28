@@ -248,6 +248,12 @@ npm run typecheck
 
 当前 UI 仍可继续使用 `fetchJson`；后续会逐步切换到 typed wrappers。API 类型描述的是当前真实 response shape，不要为了类型好看改后端 response。
 
+## Frontend API wrapper adoption
+
+`insights-ui.js` 和 `reports-ui.js` 已开始使用 `public/api.js` 中的 typed wrappers。
+
+这一步不改变 UI，只把 API endpoint、query 参数和错误解析集中到 `public/api.js`。`fetchJson` 仍保留，用于后续渐进迁移其他模块。
+
 ## 当前边界
 
 - 页面提供“使用人账号”输入框，不做登录、密码或权限校验。
