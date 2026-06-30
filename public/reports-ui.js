@@ -283,9 +283,12 @@ export function createReportsUi({ dom, state, helpers }) {
       return;
     }
 
-    const printWindow = window.open("", "_blank");
+    const printHtml = buildPrintableReportHtml(lastReportMarkdown, lastReportMeta);
+    const printUrl = URL.createObjectURL(new Blob([printHtml], { type: "text/html;charset=utf-8" }));
+    const printWindow = window.open(printUrl, "_blank");
 
     if (!printWindow) {
+      URL.revokeObjectURL(printUrl);
       downloadBlob({
         content: lastReportMarkdown,
         filename: `${buildReportFileBasename()}.md`,
@@ -294,12 +297,22 @@ export function createReportsUi({ dom, state, helpers }) {
       return;
     }
 
-    printWindow.document.write(buildPrintableReportHtml(lastReportMarkdown, lastReportMeta));
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.setTimeout(() => {
+    let didPrint = false;
+    const printWhenReady = () => {
+      if (didPrint) {
+        return;
+      }
+
+      didPrint = true;
+      printWindow.focus();
       printWindow.print();
-    }, 250);
+      printWindow.setTimeout(() => URL.revokeObjectURL(printUrl), 1000);
+    };
+
+    printWindow.addEventListener?.("load", () => {
+      printWindow.setTimeout(printWhenReady, 100);
+    }, { once: true });
+    printWindow.setTimeout(printWhenReady, 600);
   }
 
   function buildReportRequest(type) {

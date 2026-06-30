@@ -22,6 +22,13 @@ test("customer questions stay on the Claude Code streaming answer path", () => {
   assert.doesNotMatch(chatStreamSource, /fetch\(["']\/api\/ask/);
 });
 
+test("Claude Code stream errors keep the structured result message", () => {
+  const runnerSource = readText("src/claude-runner.mjs");
+
+  assert.match(runnerSource, /raw\?\.result \|\| answer/);
+  assert.match(runnerSource, /formatClaudeError\(stderr \|\| raw\?\.result \|\| answer \|\| `Claude Code exited with code \$\{exitCode\}`\)/);
+});
+
 function readText(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
 }

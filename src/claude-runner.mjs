@@ -462,8 +462,8 @@ function runStreamProcess(command, args, options) {
         return reject(new Error("请求已取消。"));
       }
 
-      if (exitCode !== 0) {
-        return reject(new Error(formatClaudeError(stderr || `Claude Code exited with code ${exitCode}`)));
+      if (exitCode !== 0 || raw?.is_error) {
+        return reject(new Error(formatClaudeError(stderr || raw?.result || answer || `Claude Code exited with code ${exitCode}`)));
       }
 
       resolve({ answer, raw, stderr });

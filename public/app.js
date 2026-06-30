@@ -42,6 +42,9 @@ const dom = {
   operationsView: document.querySelector("#operations-observe"),
   insightsView: document.querySelector("#insights-view"),
   dashboardRefreshButton: document.querySelector("#dashboard-refresh-button"),
+  refreshStatus: document.querySelector("#refresh-status"),
+  notificationButton: document.querySelector("#notification-button"),
+  notificationPanel: document.querySelector("#notification-panel"),
   knowledgeUpdatedAt: document.querySelector("#knowledge-updated-at"),
   operatorChip: document.querySelector("#operator-chip"),
   customerOperatorName: document.querySelector("#customer-operator-name"),
@@ -69,6 +72,9 @@ const dom = {
   opsHealthScore: document.querySelector("#ops-health-score"),
   opsHealthLabel: document.querySelector("#ops-health-label"),
   opsHealthParts: document.querySelector("#ops-health-parts"),
+  opsMainHealthScore: document.querySelector("#ops-main-health-score"),
+  opsMainHealthLabel: document.querySelector("#ops-main-health-label"),
+  opsMainHealthParts: document.querySelector("#ops-main-health-parts"),
   opsRuntimeState: document.querySelector("#ops-runtime-state"),
   opsLogList: document.querySelector("#ops-log-list"),
   opsToolCallList: document.querySelector("#ops-tool-call-list"),
@@ -158,6 +164,11 @@ function bindEventHandlers() {
     void loadDashboard();
   });
 
+  dom.notificationButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNotificationPanel();
+  });
+
   document.querySelectorAll("[data-dashboard-refresh]").forEach((button) => {
     button.addEventListener("click", () => {
       void loadDashboard();
@@ -165,6 +176,18 @@ function bindEventHandlers() {
   });
 
   document.addEventListener("click", (event) => {
+    if (dom.notificationPanel && !dom.notificationPanel.hidden && !event.target.closest("#notification-panel")) {
+      dom.notificationPanel.hidden = true;
+      dom.notificationButton?.setAttribute("aria-expanded", "false");
+    }
+
+    const insightsAction = event.target.closest("[data-open-insights]");
+
+    if (insightsAction) {
+      showInsightsView(insightsAction.dataset.openInsights || "overview");
+      return;
+    }
+
     const action = event.target.closest("[data-focus-target]");
 
     if (!action) {
@@ -262,7 +285,9 @@ function bindEventHandlers() {
 function setAppMode(mode, options = {}) {
   const nextMode = mode === "operations" ? "operations" : "customer";
   state.selectedAppMode = nextMode;
+  state.selectedAppView = nextMode === "operations" ? "ops" : "chat";
   document.body.dataset.mode = nextMode;
+  closeNotificationPanel();
 
   if (options.persist) {
     window.localStorage.setItem(APP_MODE_STORAGE_KEY, nextMode);
@@ -275,7 +300,6 @@ function setAppMode(mode, options = {}) {
   });
 
   if (nextMode === "operations") {
-    state.selectedAppView = "ops";
     dom.chatView.hidden = true;
     dom.operationsView.hidden = false;
     dom.insightsView.hidden = true;
@@ -286,7 +310,6 @@ function setAppMode(mode, options = {}) {
     return;
   }
 
-  state.selectedAppView = "chat";
   dom.chatView.hidden = false;
   dom.operationsView.hidden = true;
   dom.insightsView.hidden = true;
@@ -294,6 +317,49 @@ function setAppMode(mode, options = {}) {
   dom.operationsView.classList.remove("active-view");
   dom.insightsView.classList.remove("active-view");
   reportsUi.clearReportJobListPolling();
+}
+
+function showInsightsView(page = "overview") {
+  state.selectedAppMode = "operations";
+  state.selectedAppView = "insights";
+  state.selectedInsightsPage = page || "overview";
+  document.body.dataset.mode = "operations";
+  window.localStorage.setItem(APP_MODE_STORAGE_KEY, "operations");
+  closeNotificationPanel();
+
+  dom.appModeButtons.forEach((button) => {
+    const active = button.dataset.appMode === "operations";
+    button.setAttribute("aria-selected", active ? "true" : "false");
+    button.classList.toggle("active", active);
+  });
+
+  dom.chatView.hidden = true;
+  dom.operationsView.hidden = true;
+  dom.insightsView.hidden = false;
+  dom.chatView.classList.remove("active-view");
+  dom.operationsView.classList.remove("active-view");
+  dom.insightsView.classList.add("active-view");
+  insightsUi.updateInsightsPageTabs();
+  insightsUi.updateInsightsRangeControls();
+  void insightsUi.loadInsightsPage();
+}
+
+function toggleNotificationPanel() {
+  if (!dom.notificationPanel || !dom.notificationButton) {
+    return;
+  }
+
+  const open = dom.notificationPanel.hidden;
+  dom.notificationPanel.hidden = !open;
+  dom.notificationButton.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function closeNotificationPanel() {
+  if (dom.notificationPanel) {
+    dom.notificationPanel.hidden = true;
+  }
+
+  dom.notificationButton?.setAttribute("aria-expanded", "false");
 }
 
 function focusTarget(targetId) {
@@ -435,12 +501,16 @@ async function loadRuntimeConfig() {
 
 async function loadDashboard() {
   dom.dashboardRefreshButton.disabled = true;
+  setText(dom.refreshStatus, "刷新中");
 
   try {
     const payload = await fetchDashboard();
     state.dashboard = payload;
     renderDashboard(payload);
+    setText(dom.refreshStatus, "已刷新");
   } catch (error) {
+    setText(dom.refreshStatus, "刷新失败");
+
     if (dom.knowledgeUpdatedAt) {
       dom.knowledgeUpdatedAt.textContent = "知识库状态未知";
     }
@@ -484,8 +554,11 @@ function renderOperationsDashboard(operations) {
   renderOperationMetrics(operations.metrics || []);
   setText(dom.opsHealthScore, operations.health?.score ?? "82");
   setText(dom.opsHealthLabel, operations.health?.label || "良好");
+  setText(dom.opsMainHealthScore, operations.health?.score ?? "82");
+  setText(dom.opsMainHealthLabel, operations.health?.label || "良好");
   setText(dom.opsRuntimeState, operations.runtime?.status === "running" ? "运行中" : "就绪");
   renderHealthParts(operations.health?.parts || []);
+  renderHealthParts(operations.health?.parts || [], dom.opsMainHealthParts);
   renderCompactList(dom.opsActivityList, operations.recentRuns || []);
   renderHotIssues(operations.hotIssues || []);
   renderCompactList(dom.opsTrendList, operations.trends || [], renderTrendRow);
@@ -571,12 +644,12 @@ function renderOperationMetrics(items) {
   `).join("");
 }
 
-function renderHealthParts(items) {
-  if (!dom.opsHealthParts) {
+function renderHealthParts(items, container = dom.opsHealthParts) {
+  if (!container) {
     return;
   }
 
-  dom.opsHealthParts.innerHTML = items.map((item) => `
+  container.innerHTML = items.map((item) => `
     <div class="health-part">
       <span>${escapeHtml(item.label || "指标")}</span>
       <strong>${escapeHtml(item.value || 0)}</strong>
@@ -952,6 +1025,7 @@ function updateSessionHeader() {
 function appendMessage(type, sender, body, meta = "") {
   if (!state.hasMessages) {
     dom.conversation.innerHTML = "";
+    dom.conversation.classList.remove("is-empty");
     state.hasMessages = true;
   }
 
@@ -991,6 +1065,7 @@ function updateMessage(message, body, meta = "") {
 }
 
 function renderEmptyState() {
+  dom.conversation.classList.add("is-empty");
   dom.conversation.innerHTML = `
     <div class="empty-state">
       <div class="empty-mark">M</div>

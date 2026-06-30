@@ -33,8 +33,14 @@
 
         <div class="topbar-actions">
           <span class="knowledge-sync"><span class="signal-dot"></span><span id="knowledge-updated-at">知识库更新中</span></span>
+          <span id="refresh-status" class="refresh-status" aria-live="polite">待刷新</span>
           <button id="dashboard-refresh-button" class="icon-button" type="button" aria-label="刷新数据">↻</button>
-          <button class="icon-button" type="button" aria-label="通知">!</button>
+          <button id="notification-button" class="icon-button notification-button" type="button" aria-label="通知" aria-expanded="false">!</button>
+          <div id="notification-panel" class="notification-panel" hidden>
+            <strong>通知中心</strong>
+            <p>知识库已同步，运行观察数据可用。</p>
+            <p>问答请求将继续通过 Claude Code 流式回答。</p>
+          </div>
           <div class="user-chip">
             <span class="avatar-dot">K</span>
             <strong id="operator-chip">未填写</strong>
@@ -59,7 +65,7 @@
           <button class="side-nav-item" type="button" data-focus-target="ops-hot-issue-list">搜索情报</button>
           <button class="side-nav-item" type="button" data-focus-target="ops-knowledge-source-list">知识库</button>
           <button class="side-nav-item" type="button" data-focus-target="ops-log-list">监控与告警</button>
-          <button class="side-nav-item" type="button" data-focus-target="ops-release-list">报告中心</button>
+          <button id="ops-reports-button" class="side-nav-item" type="button" data-open-insights="reports">报告中心</button>
         </nav>
 
         <section class="panel-section session-section" aria-label="历史会话">
@@ -111,7 +117,7 @@
               </div>
             </div>
 
-            <div id="conversation" class="conversation" aria-live="polite">
+            <div id="conversation" class="conversation is-empty" aria-live="polite">
               <div class="empty-state">
                 <div class="empty-mark">M</div>
                 <span class="command-kicker">AI OPS COPILOT</span>
@@ -167,7 +173,24 @@
             <button class="secondary-button" type="button" data-dashboard-refresh>刷新数据</button>
           </div>
 
-          <div id="ops-metric-grid" class="ops-metric-grid" aria-label="运行指标"></div>
+          <div id="ops-filter-row" class="ops-filter-row" aria-label="运维筛选">
+            <button type="button">生产环境</button>
+            <button type="button">默认知识库</button>
+            <button type="button">最近 1 小时</button>
+            <button type="button">cluster-prod</button>
+          </div>
+
+          <div class="ops-top-row">
+            <div id="ops-metric-grid" class="ops-metric-grid" aria-label="运行指标"></div>
+            <article id="ops-main-health-card" class="dashboard-card ops-main-health-card" aria-label="运行健康度">
+              <div class="health-ring">
+                <strong><span id="ops-main-health-score">82</span><small>/100</small></strong>
+                <span id="ops-main-health-label">良好</span>
+              </div>
+              <div id="ops-main-health-parts" class="health-part-list"></div>
+              <button class="ghost-link" type="button" data-focus-target="ops-runtime-inspector">查看健康详情 →</button>
+            </article>
+          </div>
 
           <div class="ops-grid">
             <article class="dashboard-card">

@@ -115,6 +115,9 @@ test("frontend modules avoid broad dangerous DOM sinks", () => {
 
     assert.doesNotMatch(source, /innerHTML\s*\+=/, `${file} must not append raw HTML`);
     assert.doesNotMatch(source, /insertAdjacentHTML/, `${file} must not insert adjacent HTML`);
+    assert.doesNotMatch(source, /document\.write\s*\(/, `${file} must not write documents`);
+    assert.doesNotMatch(source, /eval\s*\(/, `${file} must not use eval`);
+    assert.doesNotMatch(source, /new Function\s*\(/, `${file} must not build functions dynamically`);
   }
 }
 );
