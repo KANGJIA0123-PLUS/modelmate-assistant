@@ -7,6 +7,7 @@ import { createDisabledInsightStore, initInsightStore } from "./insights/insight
 import { createQuestionLogger } from "./logging.mjs";
 import { createAskRequestQueue } from "./request-queue.mjs";
 import { buildPublicConfig } from "./public-config.mjs";
+import { buildDashboardPayload } from "./dashboard-data.mjs";
 import { readJsonBody, getStatusCode, parseRequestUrl, sendJson } from "./request-utils.mjs";
 import { createAskRouteHandler } from "./routes/ask-routes.mjs";
 import { createInsightsRouteHandler } from "./routes/insights-routes.mjs";
@@ -56,6 +57,10 @@ const server = http.createServer(async (request, response) => {
         defaultVersionId: versionRegistry.getPublicDefaultVersionId(),
         versions: versionRegistry.listPublicVersions()
       });
+    }
+
+    if (request.method === "GET" && pathname === "/api/dashboard") {
+      return sendJson(response, await dashboardPayload());
     }
 
     if (request.method === "GET" && pathname === "/api/health") {
@@ -149,6 +154,15 @@ async function initializeInsightStore() {
 
 function publicConfig() {
   return buildPublicConfig({
+    config,
+    versionRegistry,
+    askQueue,
+    historyStore
+  });
+}
+
+async function dashboardPayload() {
+  return buildDashboardPayload({
     config,
     versionRegistry,
     askQueue,

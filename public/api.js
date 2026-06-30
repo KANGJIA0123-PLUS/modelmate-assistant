@@ -2,6 +2,7 @@
 
 /** @typedef {import("../src/types/index.js").PublicConfigResponse} PublicConfigResponse */
 /** @typedef {import("../src/types/index.js").VersionsResponse} VersionsResponse */
+/** @typedef {import("../src/types/index.js").PublicDashboardResponse} PublicDashboardResponse */
 /** @typedef {import("../src/types/index.js").AskStreamEvent} AskStreamEvent */
 /** @typedef {import("../src/types/index.js").AskRequest} AskRequest */
 /** @typedef {import("../src/types/index.js").ApiErrorResponse} ApiErrorResponse */
@@ -42,6 +43,11 @@ export async function fetchRuntimeConfig() {
 /** @returns {Promise<VersionsResponse>} */
 export async function fetchVersions() {
   return fetchJson("/api/versions");
+}
+
+/** @returns {Promise<PublicDashboardResponse>} */
+export async function fetchDashboard() {
+  return fetchJson("/api/dashboard");
 }
 
 /**

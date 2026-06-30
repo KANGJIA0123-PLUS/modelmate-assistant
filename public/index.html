@@ -6,15 +6,243 @@
     <title>Modelmate 辅助运营助手</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
-  <body>
+  <body data-mode="customer">
     <main class="app-shell">
-      <aside class="side-panel" aria-label="配置">
-        <div class="brand">
+      <div class="shell-glow shell-glow-a" aria-hidden="true"></div>
+      <div class="shell-glow shell-glow-b" aria-hidden="true"></div>
+
+      <header class="global-topbar" aria-label="全局导航">
+        <div class="brand topbar-brand">
           <div class="brand-mark">M</div>
           <div>
-            <h1>Modelmate 辅助运营助手</h1>
+            <h1>Modelmate Ops</h1>
             <p id="runtime-status" class="runtime-line"><span class="signal-dot"></span><span>连接中</span></p>
           </div>
+        </div>
+
+        <nav class="mode-switcher" aria-label="模式切换">
+          <button class="mode-button" type="button" data-app-mode="customer" aria-selected="true">
+            <span aria-hidden="true">♙</span>
+            客户模式
+          </button>
+          <button class="mode-button" type="button" data-app-mode="operations" aria-selected="false">
+            <span aria-hidden="true">▥</span>
+            运维观察模式
+          </button>
+        </nav>
+
+        <div class="topbar-actions">
+          <span class="knowledge-sync"><span class="signal-dot"></span><span id="knowledge-updated-at">知识库更新中</span></span>
+          <button id="dashboard-refresh-button" class="icon-button" type="button" aria-label="刷新数据">↻</button>
+          <button class="icon-button" type="button" aria-label="通知">!</button>
+          <div class="user-chip">
+            <span class="avatar-dot">K</span>
+            <strong id="operator-chip">未填写</strong>
+          </div>
+        </div>
+      </header>
+
+      <aside class="side-panel" aria-label="会话导航">
+        <div class="side-mode-label customer-only">客户工作台</div>
+        <div class="side-mode-label operations-only">运维观察</div>
+
+        <nav class="side-nav customer-only" aria-label="客户模式导航">
+          <button class="side-nav-item active" type="button" data-app-mode="customer">首页</button>
+          <button class="side-nav-item" type="button" data-focus-target="question">提问与搜索</button>
+          <button class="side-nav-item" type="button" data-focus-target="knowledge-scope-card">知识库</button>
+          <button class="side-nav-item" type="button" data-focus-target="customer-version-list">版本与发布</button>
+          <button class="side-nav-item" type="button" data-focus-target="customer-report-list">报告与文档</button>
+        </nav>
+
+        <nav class="side-nav operations-only" aria-label="运维观察导航">
+          <button class="side-nav-item active" type="button" data-app-mode="operations">运维观察</button>
+          <button class="side-nav-item" type="button" data-focus-target="ops-hot-issue-list">搜索情报</button>
+          <button class="side-nav-item" type="button" data-focus-target="ops-knowledge-source-list">知识库</button>
+          <button class="side-nav-item" type="button" data-focus-target="ops-log-list">监控与告警</button>
+          <button class="side-nav-item" type="button" data-focus-target="ops-release-list">报告中心</button>
+        </nav>
+
+        <section class="panel-section session-section" aria-label="历史会话">
+          <div class="section-head">
+            <h2>历史会话</h2>
+            <span id="session-count">0</span>
+          </div>
+          <button id="new-session-button" class="new-session-button" type="button">新建会话</button>
+          <div id="session-list" class="session-list"></div>
+        </section>
+
+        <section class="quick-card customer-only" aria-label="快速上手">
+          <strong>快速上手</strong>
+          <p>了解如何更高效地提问，获取准确、可执行的答案。</p>
+          <button class="secondary-button" type="button" data-prompt="如何向 Modelmate 提出一个高质量的问题？">查看指南</button>
+        </section>
+
+        <section class="quick-card operations-only" aria-label="快捷入口">
+          <strong>快捷入口</strong>
+          <button class="ghost-link" type="button" data-focus-target="ops-hot-issue-list">接口超时排查</button>
+          <button class="ghost-link" type="button" data-focus-target="ops-trend-list">趋势洞察</button>
+          <button class="ghost-link" type="button" data-focus-target="ops-tool-call-list">工具调用</button>
+        </section>
+      </aside>
+
+      <section class="workspace" aria-label="问答">
+        <section id="chat-view" class="app-view active-view" aria-label="问答工作区">
+          <section id="customer-home" class="customer-home" aria-label="客户模式首页">
+            <div class="customer-hero">
+              <div class="hero-copy">
+                <span class="command-kicker">CUSTOMER KNOWLEDGE DESK</span>
+                <p class="greeting-line">早上好，<span id="customer-operator-name">小满</span></p>
+                <h2 id="customer-greeting">有什么问题可以帮你解答？</h2>
+                <p id="customer-subtitle">基于版本化知识库与实际运行上下文，提供可靠、可执行的答案。</p>
+              </div>
+              <div class="stat-strip" aria-label="当前工作区状态">
+                <span class="ai-status-card">
+                  <small>Session</small>
+                  <strong id="current-session-name">新会话</strong>
+                </span>
+                <span class="ai-status-card">
+                  <small>Context</small>
+                  <strong id="context-badge">上下文 0 条</strong>
+                </span>
+                <span class="ai-status-card">
+                  <small>Version</small>
+                  <strong id="current-version-badge">未选择版本</strong>
+                </span>
+              </div>
+            </div>
+
+            <div id="conversation" class="conversation" aria-live="polite">
+              <div class="empty-state">
+                <div class="empty-mark">M</div>
+                <span class="command-kicker">AI OPS COPILOT</span>
+                <strong>Ask anything about this release.</strong>
+                <p>选择版本后，直接询问接口、配置、日志、版本差异和知识缺口。</p>
+              </div>
+            </div>
+
+            <form id="ask-form" class="ask-form command-composer">
+              <div class="input-shell">
+                <div class="composer-toolbar">
+                  <label for="question">提问与搜索</label>
+                  <span>Enter 发送 · Shift Enter 换行</span>
+                </div>
+                <textarea id="question" name="question" rows="4" autocomplete="off" placeholder="例如：接口超时时应该先看哪些配置和日志？"></textarea>
+              </div>
+              <div class="form-actions">
+                <span id="flow-status" class="flow-status">待命</span>
+                <button id="clear-button" class="secondary-button" type="button">清空</button>
+                <button id="cancel-button" class="secondary-button" type="button" hidden>取消</button>
+                <button id="ask-button" class="primary-button" type="submit">提问</button>
+              </div>
+            </form>
+
+            <div id="customer-prompt-list" class="prompt-grid bento-prompts" aria-label="推荐提问"></div>
+
+            <div class="customer-grid">
+              <article class="dashboard-card">
+                <div class="section-head">
+                  <h2>我的最近活动</h2>
+                  <span>查看全部 →</span>
+                </div>
+                <div id="customer-activity-list" class="compact-list"></div>
+              </article>
+              <article class="dashboard-card">
+                <div class="section-head">
+                  <h2>为你推荐知识</h2>
+                  <span>查看全部 →</span>
+                </div>
+                <div id="customer-knowledge-list" class="knowledge-list"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <section id="operations-observe" class="app-view operations-observe" aria-label="运维观察模式" hidden>
+          <div class="ops-hero">
+            <div>
+              <span class="command-kicker">OPERATIONS OBSERVATORY</span>
+              <h2>下午好，<span id="ops-operator-name">Wayne</span></h2>
+              <p>专注运行健康、异常洞察与发布风险，保障系统稳定可靠。</p>
+            </div>
+            <button class="secondary-button" type="button" data-dashboard-refresh>刷新数据</button>
+          </div>
+
+          <div id="ops-metric-grid" class="ops-metric-grid" aria-label="运行指标"></div>
+
+          <div class="ops-grid">
+            <article class="dashboard-card">
+              <div class="section-head">
+                <h2>最近运行活动</h2>
+                <span>查看全部 →</span>
+              </div>
+              <div id="ops-activity-list" class="compact-list"></div>
+            </article>
+            <article class="dashboard-card">
+              <div class="section-head">
+                <h2>高频问题 TOP 5</h2>
+                <span>近 7 天</span>
+              </div>
+              <div id="ops-hot-issue-list" class="hot-issue-list"></div>
+            </article>
+          </div>
+
+          <div class="ops-bottom-grid">
+            <article class="dashboard-card">
+              <h2>趋势洞察</h2>
+              <div id="ops-trend-list" class="compact-list"></div>
+            </article>
+            <article class="dashboard-card">
+              <h2>知识缺口（热点）</h2>
+              <div id="ops-gap-list" class="compact-list"></div>
+            </article>
+            <article class="dashboard-card">
+              <h2>版本与发布追踪</h2>
+              <div id="ops-release-list" class="compact-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="insights-view" class="app-view insights-workspace" aria-label="数据洞察工作区" hidden>
+          <div class="insights-toolbar">
+            <div>
+              <h3>数据洞察</h3>
+              <p id="insights-range-label">最近 7 天 · 当前版本</p>
+            </div>
+            <div class="insights-controls">
+              <select id="insights-range-select" aria-label="统计范围">
+                <option value="7d">最近 7 天</option>
+                <option value="30d">最近 30 天</option>
+                <option value="custom">自定义</option>
+              </select>
+              <input id="insights-start" type="date" aria-label="开始日期" hidden>
+              <input id="insights-end" type="date" aria-label="结束日期" hidden>
+              <button id="refresh-insights-button" class="secondary-button" type="button">刷新</button>
+            </div>
+          </div>
+
+          <div class="insights-main-tabs" role="tablist" aria-label="数据洞察页面">
+            <button type="button" data-insights-page="overview" aria-selected="true">总览</button>
+            <button type="button" data-insights-page="frequent" aria-selected="false">高频问题</button>
+            <button type="button" data-insights-page="categories" aria-selected="false">分类分析</button>
+            <button type="button" data-insights-page="versions" aria-selected="false">版本分析</button>
+            <button type="button" data-insights-page="gaps" aria-selected="false">知识缺口</button>
+            <button type="button" data-insights-page="suggestions" aria-selected="false">平台改进建议</button>
+            <button type="button" data-insights-page="efficiency" aria-selected="false">AI 提效建议</button>
+            <button type="button" data-insights-page="reports" aria-selected="false">报告中心</button>
+          </div>
+
+          <div id="insights-page-content" class="insights-page-content" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <aside class="context-panel" aria-label="上下文与运行边界">
+        <div class="inspector-title customer-only">
+          <span class="command-kicker">Knowledge Scope</span>
+          <h2>客户上下文</h2>
+        </div>
+        <div class="inspector-title operations-only">
+          <span class="command-kicker">Runtime Inspector</span>
+          <h2>运行时检查器</h2>
         </div>
 
         <section class="account-card" aria-label="账号">
@@ -33,37 +261,121 @@
           <p id="version-description">正在加载版本...</p>
         </section>
 
-        <section class="panel-section session-section" aria-label="历史会话">
+        <section id="knowledge-scope-card" class="panel-section customer-only" aria-label="当前知识范围">
           <div class="section-head">
-            <h2>历史会话</h2>
-            <span id="session-count">0</span>
+            <h2>当前知识范围</h2>
+            <span id="knowledge-scope-status">在线</span>
           </div>
-          <button id="new-session-button" class="new-session-button" type="button">新建会话</button>
-          <div id="session-list" class="session-list"></div>
+          <strong id="knowledge-scope-title">生产环境</strong>
+          <p id="knowledge-scope-meta">cluster-prod · region-cn-hangzhou</p>
+          <button class="secondary-button" type="button" data-focus-target="version-select">编辑范围</button>
+          <dl class="scope-stats">
+            <div>
+              <dt>知识条目</dt>
+              <dd id="knowledge-item-count">0</dd>
+            </div>
+            <div>
+              <dt>文档版本</dt>
+              <dd id="knowledge-version-count">0</dd>
+            </div>
+            <div>
+              <dt>覆盖领域</dt>
+              <dd id="knowledge-domain-count">0</dd>
+            </div>
+          </dl>
         </section>
 
-        <section class="ops-card" aria-label="运行状态">
+        <section class="panel-section customer-only" aria-label="推荐来源">
+          <div class="section-head">
+            <h2>推荐来源</h2>
+            <span>查看全部 →</span>
+          </div>
+          <div id="customer-source-list" class="source-pill-list"></div>
+        </section>
+
+        <section class="panel-section customer-only" aria-label="版本与更新">
+          <div class="section-head">
+            <h2>版本与更新</h2>
+            <span>查看全部 →</span>
+          </div>
+          <div id="customer-version-list" class="compact-list"></div>
+        </section>
+
+        <section class="panel-section customer-only" aria-label="常用报表与文档">
+          <div class="section-head">
+            <h2>常用报表与文档</h2>
+            <span>查看全部 →</span>
+          </div>
+          <div id="customer-report-list" class="compact-list"></div>
+        </section>
+
+        <section id="ops-runtime-inspector" class="ops-card operations-only" aria-label="运行状态">
           <div>
-            <span class="ops-label">Claude</span>
-            <strong id="status-model">-</strong>
+            <span class="ops-label">运行健康度</span>
+            <strong><span id="ops-health-score">82</span><small>/100</small></strong>
+            <p id="ops-health-label">良好</p>
           </div>
-          <div class="ops-meter" aria-hidden="true">
-            <span></span>
+          <div id="ops-health-parts" class="health-part-list"></div>
+        </section>
+
+        <section class="panel-section operations-only" aria-label="执行步骤">
+          <div class="section-head">
+            <h2>执行步骤</h2>
+            <span id="ops-runtime-state">运行中</span>
+          </div>
+          <div class="step-list">
+            <span>解析问题意图</span>
+            <span>检索相关知识</span>
+            <span>分析与推理</span>
+            <span>汇总输出</span>
           </div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section operations-only" aria-label="运行日志">
           <div class="section-head">
+            <h2>运行日志</h2>
+            <span>最近 10 条</span>
+          </div>
+          <div id="ops-log-list" class="log-list"></div>
+        </section>
+
+        <section class="panel-section operations-only" aria-label="工具调用">
+          <div class="section-head">
+            <h2>工具调用</h2>
+            <span>只读</span>
+          </div>
+          <div id="ops-tool-call-list" class="compact-list"></div>
+        </section>
+
+        <section class="panel-section operations-only" aria-label="知识来源">
+          <div class="section-head">
+            <h2>知识来源</h2>
+            <span>Top 5</span>
+          </div>
+          <div id="ops-knowledge-source-list" class="compact-list"></div>
+        </section>
+
+        <section class="panel-section capability-section">
+          <div class="section-head">
+            <h2>能力状态</h2>
+            <span id="capability-summary">加载中</span>
+          </div>
+          <div id="capability-list" class="capability-list"></div>
+        </section>
+
+        <details class="panel-section collapsible-section">
+          <summary class="section-head collapsible-summary">
             <h2>版本知识源</h2>
             <span id="source-count">0</span>
-          </div>
+          </summary>
           <ul id="source-list" class="source-list"></ul>
-        </section>
+        </details>
 
-        <section class="panel-section">
-          <div class="section-head">
+        <details class="panel-section collapsible-section runtime-boundary">
+          <summary class="section-head collapsible-summary">
             <h2>运行边界</h2>
-          </div>
+            <span id="boundary-summary">只读边界</span>
+          </summary>
           <dl class="meta-list">
             <div>
               <dt>模型</dt>
@@ -86,52 +398,10 @@
               <dd id="timeout-value">-</dd>
             </div>
           </dl>
-        </section>
+        </details>
 
         <div id="warning-list" class="warning-list" hidden></div>
       </aside>
-
-      <section class="workspace" aria-label="问答">
-        <header class="workspace-top">
-          <div>
-            <h2>Modelmate 辅助运营助手</h2>
-            <p>
-              <span id="current-session-name">新会话</span>
-              <span class="header-separator"></span>
-              <span id="context-badge">上下文 0 条</span>
-              <span class="header-separator"></span>
-              <span id="current-version-badge">未选择版本</span>
-            </p>
-          </div>
-          <div class="top-status">
-            <span class="live-pill"><span class="pulse-dot"></span>在线</span>
-          </div>
-        </header>
-
-        <div id="conversation" class="conversation" aria-live="polite">
-          <div class="empty-state">
-            <div class="empty-mark">M</div>
-            <strong>开始提问</strong>
-            <div class="prompt-grid">
-              <button type="button" data-prompt="请根据 README.md 说明这个助手的用途，并引用依据。">README 用途</button>
-              <button type="button" data-prompt="请阅读 src/claude-runner.mjs，说明 askClaude 的处理流程。">调用流程</button>
-              <button type="button" data-prompt="请根据当前项目文件，给出这个助手下一步最值得优化的 3 点。">优化建议</button>
-            </div>
-          </div>
-        </div>
-
-        <form id="ask-form" class="ask-form">
-          <div class="input-shell">
-            <label for="question">问题</label>
-            <textarea id="question" name="question" rows="4" autocomplete="off" placeholder="例如：某个接口超时应该先看哪些配置和日志？"></textarea>
-          </div>
-          <div class="form-actions">
-            <span id="flow-status" class="flow-status">待命</span>
-            <button id="clear-button" class="secondary-button" type="button">清空</button>
-            <button id="ask-button" class="primary-button" type="submit">发送</button>
-          </div>
-        </form>
-      </section>
     </main>
 
     <script type="module" src="/app.js"></script>

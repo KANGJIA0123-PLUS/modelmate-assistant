@@ -1,95 +1,346 @@
-const form = document.querySelector("#ask-form");
-const questionInput = document.querySelector("#question");
-const conversation = document.querySelector("#conversation");
-const askButton = document.querySelector("#ask-button");
-const clearButton = document.querySelector("#clear-button");
-const operatorInput = document.querySelector("#operator-input");
-const operatorStatus = document.querySelector("#operator-status");
-const versionSelect = document.querySelector("#version-select");
-const versionStatus = document.querySelector("#version-status");
-const versionDescription = document.querySelector("#version-description");
-const runtimeStatus = document.querySelector("#runtime-status");
-const sourceList = document.querySelector("#source-list");
-const modelName = document.querySelector("#model-name");
-const statusModel = document.querySelector("#status-model");
-const retrievalMode = document.querySelector("#retrieval-mode");
-const toolList = document.querySelector("#tool-list");
-const sourceCount = document.querySelector("#source-count");
-const contextWindow = document.querySelector("#context-window");
-const timeoutValue = document.querySelector("#timeout-value");
-const warningList = document.querySelector("#warning-list");
-const flowStatus = document.querySelector("#flow-status");
-const sessionList = document.querySelector("#session-list");
-const sessionCount = document.querySelector("#session-count");
-const newSessionButton = document.querySelector("#new-session-button");
-const currentSessionName = document.querySelector("#current-session-name");
-const contextBadge = document.querySelector("#context-badge");
-const currentVersionBadge = document.querySelector("#current-version-badge");
+import { fetchDashboard, fetchRuntimeConfig, fetchVersions } from "./api.js";
+import { createChatStream } from "./chat-stream.js";
+import { createInsightsUi } from "./insights-ui.js";
+import { createReportsUi } from "./reports-ui.js";
+import { createSessionStore } from "./sessions.js";
+
+const dom = {
+  form: document.querySelector("#ask-form"),
+  questionInput: document.querySelector("#question"),
+  conversation: document.querySelector("#conversation"),
+  askButton: document.querySelector("#ask-button"),
+  cancelButton: document.querySelector("#cancel-button"),
+  clearButton: document.querySelector("#clear-button"),
+  operatorInput: document.querySelector("#operator-input"),
+  operatorStatus: document.querySelector("#operator-status"),
+  versionSelect: document.querySelector("#version-select"),
+  versionStatus: document.querySelector("#version-status"),
+  versionDescription: document.querySelector("#version-description"),
+  runtimeStatus: document.querySelector("#runtime-status"),
+  sourceList: document.querySelector("#source-list"),
+  modelName: document.querySelector("#model-name"),
+  statusModel: document.querySelector("#status-model"),
+  retrievalMode: document.querySelector("#retrieval-mode"),
+  toolList: document.querySelector("#tool-list"),
+  sourceCount: document.querySelector("#source-count"),
+  contextWindow: document.querySelector("#context-window"),
+  timeoutValue: document.querySelector("#timeout-value"),
+  boundarySummary: document.querySelector("#boundary-summary"),
+  warningList: document.querySelector("#warning-list"),
+  flowStatus: document.querySelector("#flow-status"),
+  sessionList: document.querySelector("#session-list"),
+  sessionCount: document.querySelector("#session-count"),
+  newSessionButton: document.querySelector("#new-session-button"),
+  currentSessionName: document.querySelector("#current-session-name"),
+  contextBadge: document.querySelector("#context-badge"),
+  currentVersionBadge: document.querySelector("#current-version-badge"),
+  capabilitySummary: document.querySelector("#capability-summary"),
+  capabilityList: document.querySelector("#capability-list"),
+  appViewButtons: document.querySelectorAll("[data-app-view]"),
+  appModeButtons: document.querySelectorAll("[data-app-mode]"),
+  chatView: document.querySelector("#chat-view"),
+  operationsView: document.querySelector("#operations-observe"),
+  insightsView: document.querySelector("#insights-view"),
+  dashboardRefreshButton: document.querySelector("#dashboard-refresh-button"),
+  knowledgeUpdatedAt: document.querySelector("#knowledge-updated-at"),
+  operatorChip: document.querySelector("#operator-chip"),
+  customerOperatorName: document.querySelector("#customer-operator-name"),
+  opsOperatorName: document.querySelector("#ops-operator-name"),
+  customerGreeting: document.querySelector("#customer-greeting"),
+  customerSubtitle: document.querySelector("#customer-subtitle"),
+  customerPromptList: document.querySelector("#customer-prompt-list"),
+  customerActivityList: document.querySelector("#customer-activity-list"),
+  customerKnowledgeList: document.querySelector("#customer-knowledge-list"),
+  knowledgeScopeStatus: document.querySelector("#knowledge-scope-status"),
+  knowledgeScopeTitle: document.querySelector("#knowledge-scope-title"),
+  knowledgeScopeMeta: document.querySelector("#knowledge-scope-meta"),
+  knowledgeItemCount: document.querySelector("#knowledge-item-count"),
+  knowledgeVersionCount: document.querySelector("#knowledge-version-count"),
+  knowledgeDomainCount: document.querySelector("#knowledge-domain-count"),
+  customerSourceList: document.querySelector("#customer-source-list"),
+  customerVersionList: document.querySelector("#customer-version-list"),
+  customerReportList: document.querySelector("#customer-report-list"),
+  opsMetricGrid: document.querySelector("#ops-metric-grid"),
+  opsActivityList: document.querySelector("#ops-activity-list"),
+  opsHotIssueList: document.querySelector("#ops-hot-issue-list"),
+  opsTrendList: document.querySelector("#ops-trend-list"),
+  opsGapList: document.querySelector("#ops-gap-list"),
+  opsReleaseList: document.querySelector("#ops-release-list"),
+  opsHealthScore: document.querySelector("#ops-health-score"),
+  opsHealthLabel: document.querySelector("#ops-health-label"),
+  opsHealthParts: document.querySelector("#ops-health-parts"),
+  opsRuntimeState: document.querySelector("#ops-runtime-state"),
+  opsLogList: document.querySelector("#ops-log-list"),
+  opsToolCallList: document.querySelector("#ops-tool-call-list"),
+  opsKnowledgeSourceList: document.querySelector("#ops-knowledge-source-list"),
+  insightsRangeLabel: document.querySelector("#insights-range-label"),
+  insightsRangeSelect: document.querySelector("#insights-range-select"),
+  insightsStart: document.querySelector("#insights-start"),
+  insightsEnd: document.querySelector("#insights-end"),
+  refreshInsightsButton: document.querySelector("#refresh-insights-button"),
+  insightsPageButtons: document.querySelectorAll("[data-insights-page]"),
+  insightsPageContent: document.querySelector("#insights-page-content")
+};
 
 const SESSION_STORAGE_KEY = "modelmate.sessions.v1";
 const CURRENT_SESSION_KEY = "modelmate.currentSessionId";
 const VERSION_STORAGE_KEY = "modelmate.selectedVersionId";
+const APP_MODE_STORAGE_KEY = "modelmate.selectedAppMode";
 const MAX_SESSIONS = 30;
 const MAX_STORED_MESSAGES = 80;
 const DEFAULT_HISTORY_MESSAGES = 8;
 
-let runtimeConfig = null;
-let versions = [];
-let selectedVersionId = window.localStorage.getItem(VERSION_STORAGE_KEY) || "";
-let sessions = loadSessions();
-let currentSessionId = window.localStorage.getItem(CURRENT_SESSION_KEY) || "";
-let hasMessages = false;
-let isSubmitting = false;
+const state = {
+  runtimeConfig: null,
+  dashboard: null,
+  versions: [],
+  selectedVersionId: window.localStorage.getItem(VERSION_STORAGE_KEY) || "",
+  selectedAppMode: window.localStorage.getItem(APP_MODE_STORAGE_KEY) || "customer",
+  selectedAppView: "chat",
+  selectedInsightsPage: "overview",
+  hasMessages: false,
+  isSubmitting: false,
+  isComposingQuestion: false,
+  activeAskController: null
+};
 
-ensureCurrentSession();
-operatorInput.value = window.localStorage.getItem("modelmate.operator") || "";
+const sessionStore = createSessionStore({
+  sessionStorageKey: SESSION_STORAGE_KEY,
+  currentSessionKey: CURRENT_SESSION_KEY,
+  maxSessions: MAX_SESSIONS,
+  maxStoredMessages: MAX_STORED_MESSAGES
+});
+
+const helpers = {
+  escapeHtml,
+  formatDurationMs,
+  formatRelativeTime,
+  getSelectedVersion,
+  updateMessage
+};
+const reportsUi = createReportsUi({ dom, state, helpers });
+const insightsUi = createInsightsUi({ dom, state, reportsUi, helpers });
+const chatStream = createChatStream({
+  dom,
+  state,
+  helpers: {
+    updateMessage
+  }
+});
+
+dom.operatorInput.value = window.localStorage.getItem("modelmate.operator") || "";
 updateOperatorStatus();
+setAppMode(state.selectedAppMode);
 await loadRuntimeConfig();
+await loadDashboard();
 renderSessionList();
 renderCurrentSession();
+bindEventHandlers();
 
-operatorInput.addEventListener("input", () => {
-  window.localStorage.setItem("modelmate.operator", operatorInput.value.trim());
-  updateOperatorStatus();
-});
+function bindEventHandlers() {
+  dom.operatorInput.addEventListener("input", () => {
+    window.localStorage.setItem("modelmate.operator", dom.operatorInput.value.trim());
+    updateOperatorStatus();
+  });
 
-versionSelect.addEventListener("change", () => {
-  setSelectedVersion(versionSelect.value, { persist: true });
-  flowStatus.textContent = selectedVersionId ? "待命" : "请选择版本";
-});
+  dom.versionSelect.addEventListener("change", () => {
+    setSelectedVersion(dom.versionSelect.value, { persist: true });
+    dom.flowStatus.textContent = state.selectedVersionId ? "待命" : "请选择版本";
+  });
 
-newSessionButton.addEventListener("click", () => {
-  const session = createSession();
-  sessions.unshift(session);
-  currentSessionId = session.id;
-  persistSessions();
-  renderSessionList();
-  renderCurrentSession();
-  flowStatus.textContent = "待命";
-  questionInput.focus();
-});
+  dom.appModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setAppMode(button.dataset.appMode || "customer", { persist: true });
+    });
+  });
 
-form.addEventListener("submit", async (event) => {
+  dom.dashboardRefreshButton?.addEventListener("click", () => {
+    void loadDashboard();
+  });
+
+  document.querySelectorAll("[data-dashboard-refresh]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void loadDashboard();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-focus-target]");
+
+    if (!action) {
+      return;
+    }
+
+    focusTarget(action.dataset.focusTarget || "");
+  });
+
+  dom.questionInput.addEventListener("compositionstart", () => {
+    state.isComposingQuestion = true;
+  });
+
+  dom.questionInput.addEventListener("compositionend", () => {
+    state.isComposingQuestion = false;
+  });
+
+  dom.questionInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing || state.isComposingQuestion) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!state.isSubmitting) {
+      dom.form.requestSubmit();
+    }
+  });
+
+  dom.appViewButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedAppView = button.dataset.appView || "chat";
+      insightsUi.updateAppView();
+    });
+  });
+
+  dom.insightsPageButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedInsightsPage = button.dataset.insightsPage || "overview";
+      insightsUi.updateInsightsPageTabs();
+      void insightsUi.loadInsightsPage();
+    });
+  });
+
+  dom.insightsRangeSelect?.addEventListener("change", () => {
+    insightsUi.updateInsightsRangeControls();
+    void insightsUi.loadInsightsPage();
+  });
+
+  dom.insightsStart?.addEventListener("change", () => void insightsUi.loadInsightsPage());
+  dom.insightsEnd?.addEventListener("change", () => void insightsUi.loadInsightsPage());
+  dom.refreshInsightsButton?.addEventListener("click", () => insightsUi.loadInsightsPage());
+
+  dom.cancelButton?.addEventListener("click", () => {
+    if (!state.activeAskController) {
+      return;
+    }
+
+    state.activeAskController.abort();
+    dom.cancelButton.disabled = true;
+    dom.flowStatus.textContent = "正在取消";
+  });
+
+  dom.insightsPageContent?.addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-insights-action]");
+
+    if (!action) {
+      return;
+    }
+
+    await insightsUi.handleInsightsAction(action);
+  });
+
+  dom.newSessionButton.addEventListener("click", () => {
+    setAppMode("customer", { persist: true });
+    sessionStore.createAndSelectSession();
+    renderSessionList();
+    renderCurrentSession();
+    dom.flowStatus.textContent = "待命";
+    dom.questionInput.focus();
+  });
+
+  dom.clearButton.addEventListener("click", () => {
+    setAppMode("customer", { persist: true });
+    sessionStore.clearCurrentSession();
+    renderSessionList();
+    renderCurrentSession();
+    dom.flowStatus.textContent = "待命";
+  });
+
+  dom.form.addEventListener("submit", handleAskSubmit);
+  bindPromptButtons();
+}
+
+function setAppMode(mode, options = {}) {
+  const nextMode = mode === "operations" ? "operations" : "customer";
+  state.selectedAppMode = nextMode;
+  document.body.dataset.mode = nextMode;
+
+  if (options.persist) {
+    window.localStorage.setItem(APP_MODE_STORAGE_KEY, nextMode);
+  }
+
+  dom.appModeButtons.forEach((button) => {
+    const active = button.dataset.appMode === nextMode;
+    button.setAttribute("aria-selected", active ? "true" : "false");
+    button.classList.toggle("active", active);
+  });
+
+  if (nextMode === "operations") {
+    state.selectedAppView = "ops";
+    dom.chatView.hidden = true;
+    dom.operationsView.hidden = false;
+    dom.insightsView.hidden = true;
+    dom.chatView.classList.remove("active-view");
+    dom.operationsView.classList.add("active-view");
+    dom.insightsView.classList.remove("active-view");
+    reportsUi.clearReportJobListPolling();
+    return;
+  }
+
+  state.selectedAppView = "chat";
+  dom.chatView.hidden = false;
+  dom.operationsView.hidden = true;
+  dom.insightsView.hidden = true;
+  dom.chatView.classList.add("active-view");
+  dom.operationsView.classList.remove("active-view");
+  dom.insightsView.classList.remove("active-view");
+  reportsUi.clearReportJobListPolling();
+}
+
+function focusTarget(targetId) {
+  if (!targetId) {
+    return;
+  }
+
+  const target = document.getElementById(targetId);
+
+  if (!target) {
+    return;
+  }
+
+  if (targetId === "question" || target.closest("#customer-home")) {
+    setAppMode("customer", { persist: true });
+  } else if (target.closest("#operations-observe") || target.closest(".operations-only")) {
+    setAppMode("operations", { persist: true });
+  }
+
+  target.focus?.({ preventScroll: true });
+  target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+}
+
+async function handleAskSubmit(event) {
   event.preventDefault();
 
-  const question = questionInput.value.trim();
+  if (state.isSubmitting) {
+    return;
+  }
+
+  const question = dom.questionInput.value.trim();
   const version = getSelectedVersion();
 
   if (!version) {
-    flowStatus.textContent = "请先选择版本";
-    versionSelect.focus();
+    dom.flowStatus.textContent = "请先选择版本";
+    dom.versionSelect.focus();
     return;
   }
 
   if (!question) {
-    questionInput.focus();
+    dom.questionInput.focus();
     return;
   }
 
   const operator = getOperator();
   const history = buildContextHistory();
-  const session = getCurrentSession();
-  updateSessionTitleFromQuestion(session, question);
+  sessionStore.updateTitleFromQuestion(question);
   addMessageToCurrentSession({
     role: "user",
     sender: operator,
@@ -98,177 +349,461 @@ form.addEventListener("submit", async (event) => {
     createdAt: new Date().toISOString()
   });
   appendMessage("user", operator, question);
-  questionInput.value = "";
-  askButton.disabled = true;
-  askButton.textContent = "处理中";
-  isSubmitting = true;
-  flowStatus.textContent = "检索中";
+  dom.questionInput.value = "";
+  dom.askButton.disabled = true;
+  dom.askButton.textContent = "处理中";
+  dom.cancelButton.hidden = false;
+  dom.cancelButton.disabled = false;
+  state.isSubmitting = true;
+  dom.flowStatus.textContent = "检索中";
+  state.activeAskController = new AbortController();
 
   const pending = appendMessage("assistant", "助手", "正在检索本地资料...");
-  const processPanel = createProcessPanel(pending, { operator, question, historyCount: history.length, version });
+  const processPanel = chatStream.createProcessPanel(pending, { operator, question, historyCount: history.length, version });
 
   try {
-    const payload = await askStreaming({ question, operator, history, versionId: version.id, message: pending, processPanel });
+    const payload = await chatStream.askStreaming({
+      question,
+      operator,
+      history,
+      versionId: version.id,
+      message: pending,
+      processPanel,
+      signal: state.activeAskController.signal
+    });
     addMessageToCurrentSession({
       role: "assistant",
       sender: "助手",
       content: payload?.answer || "没有返回内容。",
-      meta: formatMeta(payload || {}),
+      meta: chatStream.formatMeta(payload || {}),
       createdAt: new Date().toISOString()
     });
-    flowStatus.textContent = "待命";
+    if (state.selectedAppView === "insights") {
+      await insightsUi.loadInsightsPage();
+    }
+    dom.flowStatus.textContent = "待命";
   } catch (error) {
     pending.classList.add("error");
-    markProcessError(processPanel, error.message || String(error));
+    chatStream.markProcessError(processPanel, error.message || String(error));
     updateMessage(pending, error.message || String(error));
-    flowStatus.textContent = "异常";
+    dom.flowStatus.textContent = error.message === "请求已取消。" ? "已取消" : "异常";
   } finally {
-    isSubmitting = false;
-    askButton.disabled = !getSelectedVersion();
-    askButton.textContent = "发送";
-    questionInput.focus();
+    state.activeAskController = null;
+    state.isSubmitting = false;
+    dom.cancelButton.hidden = true;
+    dom.cancelButton.disabled = true;
+    dom.askButton.disabled = !getSelectedVersion();
+    dom.askButton.textContent = "发送";
+    dom.questionInput.focus();
   }
-});
-
-clearButton.addEventListener("click", () => {
-  const session = getCurrentSession();
-
-  if (session) {
-    session.messages = [];
-    session.title = "新会话";
-    touchSession(session);
-    persistSessions();
-  }
-
-  renderSessionList();
-  renderCurrentSession();
-  flowStatus.textContent = "待命";
-});
+}
 
 async function loadRuntimeConfig() {
   try {
-    const response = await fetch("/api/config");
-    const config = await response.json();
-    runtimeConfig = config;
+    const config = await fetchRuntimeConfig();
+    state.runtimeConfig = config;
 
-    runtimeStatus.textContent = `运行于 ${config.host}:${config.port}`;
-    runtimeStatus.innerHTML = `<span class="signal-dot"></span><span>${escapeHtml(`运行于 ${config.host}:${config.port}`)}</span>`;
-    modelName.textContent = config.displayModel || config.model || "Claude Code 默认";
-    statusModel.textContent = config.displayModel || config.model || "Claude Code 默认";
-    retrievalMode.textContent = config.retrievalMode || "-";
-    toolList.textContent = config.allowedTools?.join(", ") || "-";
-    contextWindow.textContent = [
+    dom.runtimeStatus.textContent = `运行于 ${config.host}:${config.port}`;
+    dom.runtimeStatus.innerHTML = `<span class="signal-dot"></span><span>${escapeHtml(`运行于 ${config.host}:${config.port}`)}</span>`;
+    dom.modelName.textContent = config.displayModel || config.model || "Claude Code 默认";
+    dom.statusModel.textContent = config.displayModel || config.model || "Claude Code 默认";
+    dom.retrievalMode.textContent = config.retrievalMode || "-";
+    dom.toolList.textContent = config.allowedTools?.join(", ") || "-";
+    dom.contextWindow.textContent = [
       config.contextMaxChars ? `${config.contextMaxChars} chars` : "",
       config.historyMaxMessages ? `${config.historyMaxMessages} turns` : ""
     ].filter(Boolean).join(" / ") || "-";
-    timeoutValue.textContent = config.timeoutMs ? `${Math.round(config.timeoutMs / 1000)}s` : "-";
+    dom.timeoutValue.textContent = config.timeoutMs ? `${Math.round(config.timeoutMs / 1000)}s` : "-";
+    dom.boundarySummary.textContent = formatBoundarySummary(config);
+    renderCapabilityStatus(config);
     updateSessionHeader();
     await loadVersions(config.defaultVersionId);
 
     if (config.warnings?.length) {
-      warningList.hidden = false;
-      warningList.textContent = config.warnings.join("\n");
+      dom.warningList.hidden = false;
+      dom.warningList.textContent = config.warnings.join("\n");
     }
   } catch (error) {
-    runtimeStatus.textContent = "连接失败";
-    warningList.hidden = false;
-    warningList.textContent = error.message || String(error);
+    dom.runtimeStatus.textContent = "连接失败";
+    dom.boundarySummary.textContent = "配置未加载";
+    renderCapabilityStatus(null);
+    dom.warningList.hidden = false;
+    dom.warningList.textContent = error.message || String(error);
     updateSelectedVersionUI();
   }
 }
 
-async function loadVersions(defaultVersionId) {
-  const response = await fetch("/api/versions");
+async function loadDashboard() {
+  dom.dashboardRefreshButton.disabled = true;
 
-  if (!response.ok) {
-    throw new Error("版本列表加载失败。");
+  try {
+    const payload = await fetchDashboard();
+    state.dashboard = payload;
+    renderDashboard(payload);
+  } catch (error) {
+    if (dom.knowledgeUpdatedAt) {
+      dom.knowledgeUpdatedAt.textContent = "知识库状态未知";
+    }
+
+    if (dom.warningList) {
+      dom.warningList.hidden = false;
+      dom.warningList.textContent = error.message || String(error);
+    }
+  } finally {
+    dom.dashboardRefreshButton.disabled = false;
+  }
+}
+
+function renderDashboard(payload) {
+  if (!payload) {
+    return;
   }
 
-  const payload = await response.json();
-  versions = Array.isArray(payload.versions) ? payload.versions : [];
+  if (dom.knowledgeUpdatedAt) {
+    dom.knowledgeUpdatedAt.textContent = `知识库更新于 ${formatRelativeTime(payload.generatedAt)}`;
+  }
+
+  renderCustomerDashboard(payload.customer || {});
+  renderOperationsDashboard(payload.operations || {});
+  bindPromptButtons();
+}
+
+function renderCustomerDashboard(customer) {
+  setText(dom.customerGreeting, customer.greeting || "有什么问题可以帮你解答？");
+  setText(dom.customerSubtitle, customer.subtitle || "基于版本化知识库与实际运行上下文，提供可靠、可执行的答案。");
+  renderCustomerPrompts(customer.quickPrompts || []);
+  renderCustomerKnowledgeScope(customer.knowledgeScope || null);
+  renderCompactList(dom.customerActivityList, customer.recentActivity || []);
+  renderKnowledgeCards(dom.customerKnowledgeList, customer.recommendedKnowledge || []);
+  renderSourcePills(dom.customerSourceList, customer.recommendedSources || []);
+  renderCompactList(dom.customerVersionList, customer.versionUpdates || [], renderVersionRow);
+  renderCompactList(dom.customerReportList, customer.reportDocs || []);
+}
+
+function renderOperationsDashboard(operations) {
+  renderOperationMetrics(operations.metrics || []);
+  setText(dom.opsHealthScore, operations.health?.score ?? "82");
+  setText(dom.opsHealthLabel, operations.health?.label || "良好");
+  setText(dom.opsRuntimeState, operations.runtime?.status === "running" ? "运行中" : "就绪");
+  renderHealthParts(operations.health?.parts || []);
+  renderCompactList(dom.opsActivityList, operations.recentRuns || []);
+  renderHotIssues(operations.hotIssues || []);
+  renderCompactList(dom.opsTrendList, operations.trends || [], renderTrendRow);
+  renderCompactList(dom.opsGapList, operations.knowledgeGaps || [], renderGapRow);
+  renderCompactList(dom.opsReleaseList, operations.releaseTracks || [], renderVersionRow);
+  renderLogs(operations.logs || []);
+  renderCompactList(dom.opsToolCallList, operations.toolCalls || [], renderToolCallRow);
+  renderCompactList(dom.opsKnowledgeSourceList, operations.knowledgeSources || [], renderKnowledgeSourceRow);
+}
+
+function renderCustomerPrompts(items) {
+  if (!dom.customerPromptList) {
+    return;
+  }
+
+  const prompts = items.length ? items : buildDefaultPromptCards();
+  dom.customerPromptList.innerHTML = prompts.map((item) => `
+    <button type="button" data-prompt="${escapeHtml(item.prompt || item.title || "")}">
+      <span>${escapeHtml(item.summary || "推荐提问")}</span>
+      <strong>${escapeHtml(item.title || "知识入口")}</strong>
+    </button>
+  `).join("");
+}
+
+function renderCustomerKnowledgeScope(scope) {
+  const selected = getSelectedVersion();
+  const title = selected?.name || scope?.versionName || scope?.versionId || "未选择版本";
+  const status = selected?.status || scope?.status || "active";
+  const description = selected?.description || scope?.description || "当前版本知识范围";
+  const sourceCount = Number(selected?.sourceCount || scope?.sourceCount || 0);
+
+  setText(dom.knowledgeScopeTitle, title);
+  setText(dom.knowledgeScopeStatus, status);
+  setText(dom.knowledgeScopeMeta, description);
+  setText(dom.knowledgeItemCount, String(Math.max(sourceCount * 128, sourceCount)));
+  setText(dom.knowledgeVersionCount, String(state.versions.length));
+  setText(dom.knowledgeDomainCount, String(Math.max(1, Math.min(12, sourceCount || state.versions.length))));
+}
+
+function renderKnowledgeCards(container, items) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = (items.length ? items : []).map((item) => `
+    <article class="knowledge-card">
+      <div>
+        <strong>${escapeHtml(item.title || "知识条目")}</strong>
+        <span>${escapeHtml(item.path || item.meta || "docs / runbooks")}</span>
+      </div>
+      <p>${escapeHtml(Array.isArray(item.tags) ? item.tags.join(" · ") : item.meta || "推荐阅读")}</p>
+    </article>
+  `).join("") || `<p class="insight-empty">暂无推荐知识。</p>`;
+}
+
+function renderSourcePills(container, items) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = (items.length ? items : []).map((item) => `
+    <div class="source-pill" data-tone="${escapeHtml(item.tone || "green")}">
+      <span>${escapeHtml(item.name || "知识来源")}</span>
+      <strong>${escapeHtml(item.count || 0)}</strong>
+    </div>
+  `).join("") || `<p class="insight-empty">暂无来源。</p>`;
+}
+
+function renderOperationMetrics(items) {
+  if (!dom.opsMetricGrid) {
+    return;
+  }
+
+  dom.opsMetricGrid.innerHTML = items.map((item) => `
+    <article class="metric-card">
+      <span>${escapeHtml(item.label || "指标")}</span>
+      <strong>${escapeHtml(item.value || "0")}<small>${escapeHtml(item.unit || "")}</small></strong>
+      <p>${escapeHtml(item.trend || "0")} vs 1 小时前</p>
+      <div class="mini-sparkline" aria-hidden="true">
+        ${renderSparkline([3, 5, 4, 6, 5, 7, 6, 8])}
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderHealthParts(items) {
+  if (!dom.opsHealthParts) {
+    return;
+  }
+
+  dom.opsHealthParts.innerHTML = items.map((item) => `
+    <div class="health-part">
+      <span>${escapeHtml(item.label || "指标")}</span>
+      <strong>${escapeHtml(item.value || 0)}</strong>
+    </div>
+  `).join("");
+}
+
+function renderHotIssues(items) {
+  if (!dom.opsHotIssueList) {
+    return;
+  }
+
+  dom.opsHotIssueList.innerHTML = items.map((item) => `
+    <article class="hot-issue">
+      <span class="rank-badge">${escapeHtml(item.rank || 0)}</span>
+      <div>
+        <strong>${escapeHtml(item.title || "热点问题")}</strong>
+        <p>${escapeHtml(item.route || "local-context")}</p>
+      </div>
+      <span>${escapeHtml(item.percent || 0)}%</span>
+      <div class="mini-sparkline" aria-hidden="true">${renderSparkline(item.sparkline || [])}</div>
+    </article>
+  `).join("");
+}
+
+function renderLogs(items) {
+  if (!dom.opsLogList) {
+    return;
+  }
+
+  dom.opsLogList.innerHTML = items.map((item) => `
+    <code>${escapeHtml(item)}</code>
+  `).join("") || `<p class="insight-empty">暂无日志。</p>`;
+}
+
+function renderCompactList(container, items, rowRenderer = renderListRow) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = (items.length ? items : []).map(rowRenderer).join("") || `<p class="insight-empty">暂无数据。</p>`;
+}
+
+function renderListRow(item) {
+  return `
+    <article class="compact-row">
+      <div>
+        <strong>${escapeHtml(item.title || item.versionName || item.name || "条目")}</strong>
+        <span>${escapeHtml(item.meta || item.time || item.status || "")}</span>
+      </div>
+      <em>${escapeHtml(item.status || item.label || "")}</em>
+    </article>
+  `;
+}
+
+function renderVersionRow(item) {
+  return `
+    <article class="compact-row">
+      <div>
+        <strong>${escapeHtml(item.versionName || item.versionId || "版本")}</strong>
+        <span>${escapeHtml(item.updatedAt || item.status || "")}</span>
+      </div>
+      <em>${escapeHtml(item.label || item.status || "")}</em>
+    </article>
+  `;
+}
+
+function renderTrendRow(item) {
+  return `
+    <article class="compact-row" data-tone="${escapeHtml(item.tone || "neutral")}">
+      <div>
+        <strong>${escapeHtml(item.title || "趋势")}</strong>
+        <span>${escapeHtml(item.delta || "")}</span>
+      </div>
+      <em>${escapeHtml(item.tone || "观察")}</em>
+    </article>
+  `;
+}
+
+function renderGapRow(item) {
+  return `
+    <article class="compact-row">
+      <div>
+        <strong>${escapeHtml(item.title || "知识缺口")}</strong>
+        <span>${escapeHtml(item.action || "去补充知识")}</span>
+      </div>
+      <em>${escapeHtml(item.status || "热")}</em>
+    </article>
+  `;
+}
+
+function renderToolCallRow(item) {
+  return `
+    <article class="compact-row">
+      <div>
+        <strong>${escapeHtml(item.name || "工具")}</strong>
+        <span>${escapeHtml(item.latency || "")}</span>
+      </div>
+      <em>${escapeHtml(item.status || "")}</em>
+    </article>
+  `;
+}
+
+function renderKnowledgeSourceRow(item) {
+  return `
+    <article class="compact-row">
+      <div>
+        <strong>${escapeHtml(item.name || "知识来源")}</strong>
+        <span>${escapeHtml(item.versionId || "")} · ${escapeHtml(item.sourceCount || 0)} 个目录</span>
+      </div>
+      <em>${escapeHtml(item.confidence || 0)}%</em>
+    </article>
+  `;
+}
+
+function renderSparkline(values) {
+  const safeValues = Array.isArray(values) && values.length ? values : [3, 4, 3, 5, 4, 6, 5, 7];
+
+  return safeValues.map((value) => {
+    const height = Math.max(6, Math.min(28, Number(value || 0) * 3));
+    return `<span style="height:${height}px"></span>`;
+  }).join("");
+}
+
+function buildDefaultPromptCards() {
+  return [
+    { title: "接口超时排查", summary: "定位超时根因的关键步骤", prompt: "接口超时应该先看哪些配置、日志和依赖？" },
+    { title: "版本能力对比", summary: "理解当前版本差异", prompt: "27.0.T101 和 26.3.0.1 有什么差异？" },
+    { title: "调用链梳理", summary: "找出关键类与路径", prompt: "帮我梳理这个功能的调用链和关键类。" },
+    { title: "沉淀为 FAQ", summary: "识别可复用知识", prompt: "这类问题能否沉淀成 FAQ 或 Skill？" }
+  ];
+}
+
+function setText(element, value) {
+  if (element) {
+    element.textContent = String(value ?? "");
+  }
+}
+
+async function loadVersions(defaultVersionId) {
+  const payload = await fetchVersions();
+  state.versions = Array.isArray(payload.versions) ? payload.versions : [];
   const preferredVersionId = pickPreferredVersionId(defaultVersionId || payload.defaultVersionId);
   renderVersionOptions();
   setSelectedVersion(preferredVersionId, { persist: true });
 }
 
 function pickPreferredVersionId(defaultVersionId) {
-  if (selectedVersionId && versions.some((version) => version.id === selectedVersionId)) {
-    return selectedVersionId;
+  if (state.selectedVersionId && state.versions.some((version) => version.id === state.selectedVersionId)) {
+    return state.selectedVersionId;
   }
 
-  if (defaultVersionId && versions.some((version) => version.id === defaultVersionId)) {
+  if (defaultVersionId && state.versions.some((version) => version.id === defaultVersionId)) {
     return defaultVersionId;
   }
 
-  return versions.find((version) => version.status === "active")?.id || versions[0]?.id || "";
+  return state.versions.find((version) => version.status === "active")?.id || state.versions[0]?.id || "";
 }
 
 function renderVersionOptions() {
-  versionSelect.innerHTML = "";
+  dom.versionSelect.innerHTML = "";
 
-  if (versions.length === 0) {
+  if (state.versions.length === 0) {
     const option = document.createElement("option");
     option.value = "";
     option.textContent = "暂无可用版本";
-    versionSelect.append(option);
+    dom.versionSelect.append(option);
     return;
   }
 
-  for (const version of versions) {
+  for (const version of state.versions) {
     const option = document.createElement("option");
     option.value = version.id;
     option.textContent = `${version.name || version.id} · ${version.status || "active"}`;
-    versionSelect.append(option);
+    dom.versionSelect.append(option);
   }
 }
 
 function setSelectedVersion(versionId, options = {}) {
-  selectedVersionId = String(versionId || "").trim();
-  versionSelect.value = selectedVersionId;
+  state.selectedVersionId = String(versionId || "").trim();
+  dom.versionSelect.value = state.selectedVersionId;
 
   if (options.persist) {
-    window.localStorage.setItem(VERSION_STORAGE_KEY, selectedVersionId);
+    window.localStorage.setItem(VERSION_STORAGE_KEY, state.selectedVersionId);
   }
 
   updateSelectedVersionUI();
+  renderCustomerKnowledgeScope(state.dashboard?.customer?.knowledgeScope || null);
+  void insightsUi.loadInsightsPage();
 }
 
 function getSelectedVersion() {
-  return versions.find((version) => version.id === selectedVersionId) || null;
+  return state.versions.find((version) => version.id === state.selectedVersionId) || null;
 }
 
 function updateSelectedVersionUI() {
   const version = getSelectedVersion();
 
   if (!version) {
-    versionStatus.textContent = "必选";
-    versionDescription.textContent = versions.length ? "请选择一个版本后再提问。" : "没有可用版本，请检查服务端配置。";
-    sourceCount.textContent = "0";
-    currentVersionBadge.textContent = "未选择版本";
-    sourceList.innerHTML = "";
-    askButton.disabled = true;
+    dom.versionStatus.textContent = "必选";
+    dom.versionDescription.textContent = state.versions.length ? "请选择一个版本后再提问。" : "没有可用版本，请检查服务端配置。";
+    dom.sourceCount.textContent = "0";
+    dom.currentVersionBadge.textContent = "未选择版本";
+    dom.sourceList.innerHTML = "";
+    dom.askButton.disabled = true;
     return;
   }
 
-  versionStatus.textContent = version.status || "active";
-  versionDescription.textContent = version.description || "当前版本暂无描述。";
-  sourceCount.textContent = String(version.sourceCount || 0);
-  currentVersionBadge.textContent = version.name || version.id;
-  askButton.disabled = isSubmitting;
+  dom.versionStatus.textContent = version.status || "active";
+  dom.versionDescription.textContent = version.description || "当前版本暂无描述。";
+  dom.sourceCount.textContent = String(version.sourceCount || 0);
+  dom.currentVersionBadge.textContent = version.name || version.id;
+  dom.askButton.disabled = state.isSubmitting;
   renderVersionSourceList(version);
 }
 
 function renderVersionSourceList(currentVersion) {
-  sourceList.innerHTML = "";
+  dom.sourceList.innerHTML = "";
 
-  for (const version of versions) {
+  for (const version of state.versions) {
     const item = document.createElement("li");
     item.dataset.active = version.id === currentVersion.id ? "true" : "false";
     item.innerHTML = `
       <strong>${escapeHtml(version.name || version.id)}</strong>
       <span>${escapeHtml(formatVersionMeta(version))}</span>
     `;
-    sourceList.append(item);
+    dom.sourceList.append(item);
   }
 }
 
@@ -277,120 +812,68 @@ function formatVersionMeta(version) {
   return `${version.status || "active"} · ${version.sourceCount || 0} 个目录${tags}`;
 }
 
-function loadSessions() {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(SESSION_STORAGE_KEY) || "[]");
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map(normalizeSession)
-      .filter(Boolean)
-      .sort(sortByUpdatedAtDesc)
-      .slice(0, MAX_SESSIONS);
-  } catch {
-    return [];
-  }
+function formatBoundarySummary(config) {
+  const mode = config.retrievalMode || "检索模式";
+  const toolCount = Array.isArray(config.allowedTools) ? config.allowedTools.length : 0;
+  const tools = toolCount ? `只读 ${toolCount} 项` : "只读工具";
+  const timeout = config.timeoutMs ? `${Math.round(config.timeoutMs / 1000)}s` : "";
+  return [mode, tools, timeout].filter(Boolean).join(" · ");
 }
 
-function ensureCurrentSession() {
-  if (!sessions.length) {
-    const session = createSession();
-    sessions = [session];
-    currentSessionId = session.id;
-    persistSessions();
+function renderCapabilityStatus(config) {
+  if (!dom.capabilityList || !dom.capabilitySummary) {
     return;
   }
 
-  if (!sessions.some((session) => session.id === currentSessionId)) {
-    currentSessionId = sessions[0].id;
-    window.localStorage.setItem(CURRENT_SESSION_KEY, currentSessionId);
-  }
+  const capabilities = buildCapabilityItems(config);
+  dom.capabilitySummary.textContent = config ? "3 项" : "未加载";
+  dom.capabilityList.innerHTML = capabilities.map((item) => `
+    <article class="capability-item" data-status="${escapeHtml(item.status)}">
+      <div>
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${escapeHtml(item.statusLabel)}</span>
+      </div>
+      <p>${escapeHtml(item.summary)}</p>
+    </article>
+  `).join("");
 }
 
-function createSession() {
-  const now = new Date().toISOString();
+function buildCapabilityItems(config) {
+  const capabilities = config?.capabilities || {};
 
-  return {
-    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    title: "新会话",
-    createdAt: now,
-    updatedAt: now,
-    messages: []
-  };
-}
-
-function normalizeSession(value) {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const id = String(value.id || "").trim();
-
-  if (!id) {
-    return null;
-  }
-
-  const createdAt = normalizeDate(value.createdAt);
-  const updatedAt = normalizeDate(value.updatedAt || value.createdAt);
-  const messages = Array.isArray(value.messages)
-    ? value.messages.map(normalizeStoredMessage).filter(Boolean).slice(-MAX_STORED_MESSAGES)
-    : [];
-
-  return {
-    id,
-    title: String(value.title || "新会话").trim().slice(0, 60) || "新会话",
-    createdAt,
-    updatedAt,
-    messages
-  };
-}
-
-function normalizeStoredMessage(value) {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const role = value.role === "assistant" ? "assistant" : value.role === "user" ? "user" : "";
-  const content = String(value.content || "").trim();
-
-  if (!role || !content) {
-    return null;
-  }
-
-  return {
-    role,
-    sender: String(value.sender || (role === "assistant" ? "助手" : "用户")).trim().slice(0, 80),
-    content,
-    meta: String(value.meta || "").trim().slice(0, 240),
-    createdAt: normalizeDate(value.createdAt)
-  };
-}
-
-function normalizeDate(value) {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : new Date().toISOString();
-}
-
-function persistSessions() {
-  sessions = sessions.sort(sortByUpdatedAtDesc).slice(0, MAX_SESSIONS);
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessions));
-  window.localStorage.setItem(CURRENT_SESSION_KEY, currentSessionId);
+  return [
+    capabilities.queue || {
+      name: "Queue",
+      status: "unknown",
+      statusLabel: "未加载",
+      summary: "等待服务端返回队列状态。"
+    },
+    capabilities.telemetry || {
+      name: "Telemetry",
+      status: "unknown",
+      statusLabel: "未加载",
+      summary: "等待服务端返回 telemetry 状态。"
+    },
+    capabilities.skills || {
+      name: "Skills",
+      status: "unknown",
+      statusLabel: "未加载",
+      summary: "等待服务端返回 skills 状态。"
+    }
+  ];
 }
 
 function renderSessionList() {
-  sessionList.innerHTML = "";
-  sessionCount.textContent = String(sessions.length);
+  dom.sessionList.innerHTML = "";
+  dom.sessionCount.textContent = String(sessionStore.sessions.length);
 
-  for (const session of sessions) {
+  for (const session of sessionStore.sessions) {
     const item = document.createElement("div");
     const mainButton = document.createElement("button");
     const deleteButton = document.createElement("button");
     const questionCount = session.messages.filter((message) => message.role === "user").length;
     item.className = "session-item";
-    item.dataset.active = session.id === currentSessionId ? "true" : "false";
+    item.dataset.active = session.id === sessionStore.currentSessionId ? "true" : "false";
     mainButton.type = "button";
     mainButton.className = "session-main";
     mainButton.innerHTML = `
@@ -398,12 +881,11 @@ function renderSessionList() {
       <span class="session-meta">${escapeHtml(`${questionCount} 问 · ${formatRelativeTime(session.updatedAt)}`)}</span>
     `;
     mainButton.addEventListener("click", () => {
-      currentSessionId = session.id;
-      persistSessions();
+      sessionStore.selectSession(session.id);
       renderSessionList();
       renderCurrentSession();
-      flowStatus.textContent = "已切换会话";
-      questionInput.focus();
+      dom.flowStatus.textContent = "已切换会话";
+      dom.questionInput.focus();
     });
     deleteButton.type = "button";
     deleteButton.className = "session-delete";
@@ -414,16 +896,16 @@ function renderSessionList() {
       deleteSession(session.id);
     });
     item.append(mainButton, deleteButton);
-    sessionList.append(item);
+    dom.sessionList.append(item);
   }
 
   updateSessionHeader();
 }
 
 function renderCurrentSession() {
-  const session = getCurrentSession();
-  conversation.innerHTML = "";
-  hasMessages = false;
+  const session = sessionStore.getCurrentSession();
+  dom.conversation.innerHTML = "";
+  state.hasMessages = false;
 
   if (!session || session.messages.length === 0) {
     renderEmptyState();
@@ -438,89 +920,120 @@ function renderCurrentSession() {
   updateSessionHeader();
 }
 
-function getCurrentSession() {
-  ensureCurrentSession();
-  return sessions.find((session) => session.id === currentSessionId) || sessions[0];
-}
-
 function addMessageToCurrentSession(message) {
-  const session = getCurrentSession();
-
-  if (!session) {
-    return;
-  }
-
-  session.messages.push(normalizeStoredMessage(message));
-  session.messages = session.messages.filter(Boolean).slice(-MAX_STORED_MESSAGES);
-  touchSession(session);
-  persistSessions();
+  sessionStore.addMessage(message);
   renderSessionList();
 }
 
 function deleteSession(sessionId) {
-  const deletedCurrent = sessionId === currentSessionId;
-  sessions = sessions.filter((session) => session.id !== sessionId);
-
-  if (!sessions.length) {
-    const session = createSession();
-    sessions = [session];
-    currentSessionId = session.id;
-  } else if (deletedCurrent) {
-    currentSessionId = sessions[0].id;
-  }
-
-  persistSessions();
+  const deletedCurrent = sessionStore.deleteSession(sessionId);
   renderSessionList();
   renderCurrentSession();
-  flowStatus.textContent = deletedCurrent ? "已删除当前会话" : "已删除会话";
-  questionInput.focus();
-}
-
-function touchSession(session) {
-  session.updatedAt = new Date().toISOString();
-}
-
-function updateSessionTitleFromQuestion(session, question) {
-  if (!session || (session.title && session.title !== "新会话")) {
-    return;
-  }
-
-  session.title = truncateText(question.replace(/\s+/g, " "), 24);
-  touchSession(session);
-  persistSessions();
+  dom.flowStatus.textContent = deletedCurrent ? "已删除当前会话" : "已删除会话";
+  dom.questionInput.focus();
 }
 
 function buildContextHistory() {
-  const session = getCurrentSession();
-  const limit = getHistoryLimit();
-
-  if (!session || limit <= 0) {
-    return [];
-  }
-
-  return session.messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .slice(-limit)
-    .map((message) => ({
-      role: message.role,
-      content: message.content
-    }));
+  return sessionStore.buildContextHistory(getHistoryLimit());
 }
 
 function getHistoryLimit() {
-  return Number(runtimeConfig?.historyMaxMessages || DEFAULT_HISTORY_MESSAGES);
+  return Number(state.runtimeConfig?.historyMaxMessages || DEFAULT_HISTORY_MESSAGES);
 }
 
 function updateSessionHeader() {
-  const session = getCurrentSession();
+  const session = sessionStore.getCurrentSession();
   const historyCount = Math.min(session?.messages?.length || 0, getHistoryLimit());
 
-  currentSessionName.textContent = session?.title || "新会话";
-  contextBadge.textContent = `上下文 ${historyCount} 条`;
+  dom.currentSessionName.textContent = session?.title || "新会话";
+  dom.contextBadge.textContent = `上下文 ${historyCount} 条`;
 }
 
-function sortByUpdatedAtDesc(left, right) {
-  return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+function appendMessage(type, sender, body, meta = "") {
+  if (!state.hasMessages) {
+    dom.conversation.innerHTML = "";
+    state.hasMessages = true;
+  }
+
+  const message = document.createElement("article");
+  message.className = `message ${type}`;
+  message.innerHTML = `
+    <div class="message-header">
+      <span>${escapeHtml(sender)}</span>
+      <span class="message-meta">${escapeHtml(meta)}</span>
+    </div>
+    <div class="message-body">${escapeHtml(body)}</div>
+  `;
+  dom.conversation.append(message);
+  dom.conversation.scrollTop = dom.conversation.scrollHeight;
+  return message;
+}
+
+function getOperator() {
+  const operator = dom.operatorInput.value.trim();
+  return operator || "未填写账号";
+}
+
+function updateOperatorStatus() {
+  const operator = getOperator();
+  dom.operatorStatus.textContent = operator === "未填写账号"
+    ? "用于问答记录"
+    : `记录为：${operator}`;
+  setText(dom.operatorChip, operator);
+  setText(dom.customerOperatorName, operator === "未填写账号" ? "小满" : operator);
+  setText(dom.opsOperatorName, operator === "未填写账号" ? "Wayne" : operator);
+}
+
+function updateMessage(message, body, meta = "") {
+  message.querySelector(".message-body").textContent = body;
+  message.querySelector(".message-meta").textContent = meta;
+  dom.conversation.scrollTop = dom.conversation.scrollHeight;
+}
+
+function renderEmptyState() {
+  dom.conversation.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-mark">M</div>
+      <span class="command-kicker">AI OPS COPILOT</span>
+      <strong>Ask anything about this release.</strong>
+      <p>选择版本后，直接询问接口、配置、日志、版本差异和知识缺口。</p>
+      <div class="prompt-grid bento-prompts">
+        <button type="button" data-prompt="这个接口超时应该先看哪些配置、日志和依赖？">
+          <span>现网排障</span>
+          <strong>接口超时排查</strong>
+        </button>
+        <button type="button" data-prompt="27.0.T101 和 26.3.0.1 这个功能有什么差异？">
+          <span>版本差异</span>
+          <strong>版本能力对比</strong>
+        </button>
+        <button type="button" data-prompt="帮我梳理这个功能的调用链和关键类。">
+          <span>接口调用链</span>
+          <strong>代码路径梳理</strong>
+        </button>
+        <button type="button" data-prompt="这类问题能否沉淀成 FAQ 或 Skill？">
+          <span>知识缺口</span>
+          <strong>沉淀为 FAQ / Skill</strong>
+        </button>
+      </div>
+    </div>
+  `;
+  bindPromptButtons();
+  dom.conversation.scrollTop = 0;
+}
+
+function bindPromptButtons() {
+  document.querySelectorAll("[data-prompt]").forEach((button) => {
+    if (button.dataset.promptBound === "true") {
+      return;
+    }
+
+    button.dataset.promptBound = "true";
+    button.addEventListener("click", () => {
+      setAppMode("customer", { persist: true });
+      dom.questionInput.value = button.dataset.prompt || "";
+      dom.form.requestSubmit();
+    });
+  });
 }
 
 function formatRelativeTime(value) {
@@ -551,465 +1064,18 @@ function formatRelativeTime(value) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function appendMessage(type, sender, body, meta = "") {
-  if (!hasMessages) {
-    conversation.innerHTML = "";
-    hasMessages = true;
+function formatDurationMs(value) {
+  const ms = Number(value || 0);
+
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return "0s";
   }
 
-  const message = document.createElement("article");
-  message.className = `message ${type}`;
-  message.innerHTML = `
-    <div class="message-header">
-      <span>${escapeHtml(sender)}</span>
-      <span class="message-meta">${escapeHtml(meta)}</span>
-    </div>
-    <div class="message-body">${escapeHtml(body)}</div>
-  `;
-  conversation.append(message);
-  conversation.scrollTop = conversation.scrollHeight;
-  return message;
-}
-
-function getOperator() {
-  const operator = operatorInput.value.trim();
-  return operator || "未填写账号";
-}
-
-function updateOperatorStatus() {
-  const operator = getOperator();
-  operatorStatus.textContent = operator === "未填写账号"
-    ? "用于问答记录"
-    : `记录为：${operator}`;
-}
-
-function updateMessage(message, body, meta = "") {
-  message.querySelector(".message-body").textContent = body;
-  message.querySelector(".message-meta").textContent = meta;
-  conversation.scrollTop = conversation.scrollHeight;
-}
-
-function renderEmptyState() {
-  conversation.innerHTML = `
-    <div class="empty-state">
-      <div class="empty-mark">M</div>
-      <strong>开始提问</strong>
-      <div class="prompt-grid">
-        <button type="button" data-prompt="请根据 README.md 说明这个助手的用途，并引用依据。">README 用途</button>
-        <button type="button" data-prompt="请阅读 src/claude-runner.mjs，说明 askClaude 的处理流程。">调用流程</button>
-        <button type="button" data-prompt="请根据当前项目文件，给出这个助手下一步最值得优化的 3 点。">优化建议</button>
-      </div>
-    </div>
-  `;
-  bindPromptButtons();
-  conversation.scrollTop = 0;
-}
-
-function formatMeta(payload) {
-  const seconds = payload.elapsedMs ? `${(payload.elapsedMs / 1000).toFixed(1)}s` : "";
-  const version = payload.versionName || "";
-  const quick = payload.quickReply ? "quick" : "";
-  const turns = payload.claude?.numTurns ? `${payload.claude.numTurns} turns` : "";
-  const models = payload.claude?.modelNames?.length ? payload.claude.modelNames.join(", ") : "";
-  const cost = payload.claude?.totalCostUsd ? `$${payload.claude.totalCostUsd}` : "";
-  const sources = payload.context?.usedFiles?.length ? `${payload.context.usedFiles.length} sources` : "";
-  const history = payload.historyCount ? `${payload.historyCount} history` : "";
-  return [seconds, version, quick, models, turns, cost, sources, history].filter(Boolean).join(" / ");
-}
-
-async function askStreaming({ question, operator, history, versionId, message, processPanel }) {
-  const response = await fetch("/api/ask-stream", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ question, operator, history, versionId })
-  });
-
-  if (!response.ok) {
-    const payload = await response.json();
-    throw new Error(payload.error || "请求失败。");
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
   }
 
-  if (!response.body) {
-    throw new Error("当前浏览器不支持流式响应。");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const state = {
-    answer: "",
-    meta: "",
-    startedAt: Date.now(),
-    processPanel,
-    historyCount: history.length,
-    versionId,
-    hasOutput: false
-  };
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
-
-      const event = parseStreamEvent(line);
-
-      if (!event) {
-        continue;
-      }
-
-      handleStreamEvent(event, state, message);
-
-      if (event.type === "done") {
-        return event.payload;
-      }
-
-      if (event.type === "error") {
-        throw new Error(event.error || "流式响应失败。");
-      }
-    }
-  }
-}
-
-function handleStreamEvent(event, state, message) {
-  updateProcessFromEvent(event, state);
-
-  if (event.type === "history") {
-    state.historyCount = event.count || 0;
-    return;
-  }
-
-  if (event.type === "status") {
-    flowStatus.textContent = event.message || "处理中";
-
-    if (!state.answer) {
-      updateMessage(message, event.message || "Claude Code 正在处理...", state.meta || elapsedMeta(state.startedAt));
-    }
-
-    return;
-  }
-
-  if (event.type === "context") {
-    const sources = event.context?.usedFiles?.length || 0;
-    state.meta = sources ? `${sources} sources` : "";
-    return;
-  }
-
-  if (event.type === "meta" && event.model) {
-    state.meta = [event.model, state.meta].filter(Boolean).join(" / ");
-
-    if (!state.answer) {
-      updateMessage(message, "已连接模型，正在等待输出...", state.meta);
-    }
-
-    return;
-  }
-
-  if (event.type === "delta") {
-    if (!state.hasOutput) {
-      state.hasOutput = true;
-      completeProcessStep(state.processPanel, "thinking", "思考完成，开始输出");
-      completeProcessStep(state.processPanel, "claude", "已开始流式输出回答");
-      upsertProcessStep(state.processPanel, "first-output", "首段输出", "已收到模型文本增量", "done");
-    }
-
-    state.answer += event.text || "";
-    flowStatus.textContent = "生成中";
-    updateMessage(message, state.answer, state.meta);
-    return;
-  }
-
-  if (event.type === "done") {
-    updateMessage(message, event.payload?.answer || state.answer || "没有返回内容。", formatMeta(event.payload || {}));
-    finalizeProcessPanel(state.processPanel, event.payload || {}, state.startedAt);
-  }
-}
-
-function createProcessPanel(message, { operator, question, historyCount, version }) {
-  const details = document.createElement("details");
-  details.className = "process-panel";
-  details.open = true;
-  details.innerHTML = `
-    <summary>
-      <span>调用过程</span>
-      <span class="process-summary">准备中</span>
-    </summary>
-    <ol class="process-steps"></ol>
-  `;
-
-  const body = message.querySelector(".message-body");
-  if (body) {
-    body.before(details);
-  } else {
-    message.append(details);
-  }
-  upsertProcessStep(details, "receive", "接收问题", `${operator} · ${truncateText(question, 42)}`, "done");
-  upsertProcessStep(details, "version", "版本路由", `${version.name || version.id} · ${version.sourceCount || 0} 个目录`, "done");
-  upsertProcessStep(details, "history", "会话上下文", historyCount > 0 ? `已带入最近 ${historyCount} 条消息` : "当前会话暂无可带入历史", "done");
-  return details;
-}
-
-function updateProcessFromEvent(event, state) {
-  const panel = state.processPanel;
-
-  if (!panel) {
-    return;
-  }
-
-  if (event.type === "start") {
-    if (event.versionName) {
-      upsertProcessStep(panel, "version", "版本路由", `${event.versionName} · ${event.versionId || ""}`, "done");
-    }
-
-    if (event.historyCount > 0) {
-      upsertProcessStep(panel, "history", "会话上下文", `已带入最近 ${event.historyCount} 条消息`, "done");
-    }
-
-    setProcessSummary(panel, "已接收请求");
-    return;
-  }
-
-  if (event.type === "history") {
-    upsertProcessStep(panel, "history", "会话上下文", `已加载最近 ${event.count || 0} 条消息`, "done");
-    return;
-  }
-
-  if (event.type === "status") {
-    const message = event.message || "Claude Code 正在处理";
-
-    if (message.includes("版本化")) {
-      upsertProcessStep(panel, "version", "版本路由", message, "done");
-      upsertProcessStep(panel, "claude", "Claude Code", "只读工具准备中", "active");
-    } else if (message.includes("检索")) {
-      upsertProcessStep(panel, "retrieval", "本地检索", message, "active");
-    } else if (message.includes("等待模型")) {
-      upsertProcessStep(panel, "retrieval", "本地检索", "检索完成", "done");
-      upsertProcessStep(panel, "claude", "Claude Code", message, "active");
-    } else if (message.includes("请求模型")) {
-      upsertProcessStep(panel, "claude", "Claude Code", message, "active");
-    } else if (message.includes("思考")) {
-      upsertProcessStep(panel, "thinking", "模型状态", message, "active");
-    } else {
-      upsertProcessStep(panel, "status", "处理状态", message, "active");
-    }
-
-    setProcessSummary(panel, message);
-    return;
-  }
-
-  if (event.type === "context") {
-    const context = event.context || {};
-    const files = context.usedFiles || [];
-    const usesClaudeTools = runtimeConfig?.retrievalMode === "claude-tools";
-    const detail = files.length
-      ? `命中 ${files.length} 个来源：${files.map(shortPath).join("、")}`
-      : usesClaudeTools
-        ? "已启用当前版本的 Claude Code 只读工具"
-        : "本地知识库未命中，必要时将使用模型通用知识";
-
-    upsertProcessStep(panel, usesClaudeTools ? "claude-tools" : "retrieval", usesClaudeTools ? "只读工具" : "本地检索", detail, "done");
-    setProcessSummary(panel, files.length ? `命中 ${files.length} 个来源` : usesClaudeTools ? "只读工具已启用" : "本地未命中");
-    return;
-  }
-
-  if (event.type === "meta") {
-    const parts = [];
-
-    if (event.model) {
-      parts.push(`模型 ${event.model}`);
-    }
-
-    if (event.sessionId) {
-      parts.push(`会话 ${event.sessionId.slice(0, 8)}`);
-    }
-
-    upsertProcessStep(panel, "claude", "Claude Code", parts.join(" · ") || "已连接", "active");
-    setProcessSummary(panel, event.model ? `已连接 ${event.model}` : "已连接模型");
-  }
-}
-
-function upsertProcessStep(panel, key, title, detail, state) {
-  if (!panel) {
-    return;
-  }
-
-  const list = panel.querySelector(".process-steps");
-  let item = list.querySelector(`[data-step="${key}"]`);
-
-  if (!item) {
-    item = document.createElement("li");
-    item.dataset.step = key;
-    item.innerHTML = `
-      <span class="process-dot"></span>
-      <div>
-        <strong></strong>
-        <p></p>
-      </div>
-    `;
-    list.append(item);
-  }
-
-  item.dataset.state = state || "pending";
-  item.querySelector("strong").textContent = title;
-  item.querySelector("p").textContent = detail || "";
-}
-
-function finalizeProcessPanel(panel, payload, startedAt) {
-  if (!panel) {
-    return;
-  }
-
-  completeActiveProcessSteps(panel);
-  completeProcessStep(panel, "thinking", "思考完成");
-  completeProcessStep(panel, "claude", "模型已返回结果");
-  const detailParts = [];
-  const seconds = payload.elapsedMs ? `${(payload.elapsedMs / 1000).toFixed(1)}s` : `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
-
-  detailParts.push(seconds);
-
-  if (payload.claude?.modelNames?.length) {
-    detailParts.push(payload.claude.modelNames.join(", "));
-  }
-
-  if (payload.context?.usedFiles?.length) {
-    detailParts.push(`${payload.context.usedFiles.length} sources`);
-  }
-
-  if (payload.historyCount) {
-    detailParts.push(`${payload.historyCount} history`);
-  }
-
-  if (payload.quickReply) {
-    detailParts.push("quick reply");
-  }
-
-  upsertProcessStep(panel, "complete", "完成", detailParts.join(" · "), "done");
-  setProcessSummary(panel, `已完成 · ${detailParts.join(" · ")}`);
-  panel.open = false;
-}
-
-function completeActiveProcessSteps(panel) {
-  if (!panel) {
-    return;
-  }
-
-  panel.querySelectorAll('.process-steps li[data-state="active"]').forEach((item) => {
-    const key = item.dataset.step || "";
-    item.dataset.state = "done";
-
-    if (key === "thinking") {
-      item.querySelector("p").textContent = "思考完成";
-    }
-
-    if (key === "claude") {
-      item.querySelector("p").textContent = "模型已返回结果";
-    }
-  });
-}
-
-function completeProcessStep(panel, key, detail) {
-  const item = panel?.querySelector(`.process-steps li[data-step="${key}"]`);
-
-  if (!item) {
-    return;
-  }
-
-  item.dataset.state = "done";
-
-  if (detail) {
-    item.querySelector("p").textContent = detail;
-  }
-}
-
-function markProcessError(panel, message) {
-  if (!panel) {
-    return;
-  }
-
-  completeActiveProcessSteps(panel);
-  upsertProcessStep(panel, "error", "调用失败", message, "error");
-  setProcessSummary(panel, "调用失败");
-  panel.open = true;
-}
-
-function setProcessSummary(panel, text) {
-  const summary = panel?.querySelector(".process-summary");
-
-  if (summary) {
-    summary.textContent = text || "";
-  }
-}
-
-function truncateText(value, maxLength) {
-  const text = String(value || "");
-
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(0, maxLength - 1)}…`;
-}
-
-function shortPath(filePath) {
-  const parts = String(filePath || "").split(/[\\/]/);
-  return parts.slice(-2).join("/");
-}
-
-function parseStreamEvent(line) {
-  try {
-    return JSON.parse(line);
-  } catch {
-    return null;
-  }
-}
-
-function elapsedMeta(startedAt) {
-  return `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
-}
-
-function startPendingStatus(message) {
-  const startedAt = Date.now();
-  const timer = window.setInterval(() => {
-    const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-
-    if (seconds < 5) {
-      updateMessage(message, "正在检索本地资料...");
-      flowStatus.textContent = "检索中";
-      return;
-    }
-
-    if (seconds < 30) {
-      updateMessage(message, `已交给 Claude Code 生成（${seconds}s），本地模型可能需要几十秒...`);
-      flowStatus.textContent = "生成中";
-      return;
-    }
-
-    updateMessage(message, `仍在生成（${seconds}s）。如果知识源很多或本地模型较慢，会多等一会儿。`);
-    flowStatus.textContent = `${seconds}s`;
-  }, 1000);
-
-  return () => window.clearInterval(timer);
-}
-
-function bindPromptButtons() {
-  document.querySelectorAll("[data-prompt]").forEach((button) => {
-    button.addEventListener("click", () => {
-      questionInput.value = button.dataset.prompt || "";
-      form.requestSubmit();
-    });
-  });
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
 }
 
 function escapeHtml(value) {

@@ -48,6 +48,141 @@ export interface VersionsResponse {
   defaultVersionId: VersionId;
 }
 
+export interface PublicDashboardResponse {
+  generatedAt: IsoTimestamp;
+  modeLabels: {
+    customer: string;
+    operations: string;
+  };
+  customer: {
+    greeting: string;
+    subtitle: string;
+    quickPrompts: PublicDashboardPrompt[];
+    knowledgeScope: PublicDashboardKnowledgeScope;
+    recentActivity: PublicDashboardListItem[];
+    recommendedKnowledge: PublicDashboardKnowledgeItem[];
+    recommendedSources: PublicDashboardSourceItem[];
+    versionUpdates: PublicDashboardVersionItem[];
+    reportDocs: PublicDashboardListItem[];
+  };
+  operations: {
+    runtime: {
+      status: string;
+      model: string;
+      retrievalMode: string;
+      defaultVersionId: VersionId | "";
+      activeCount: number;
+      queuedCount: number;
+      contextWindow: number;
+      timeoutMs: number;
+    };
+    metrics: PublicDashboardMetric[];
+    health: {
+      score: number;
+      label: string;
+      parts: PublicDashboardHealthPart[];
+    };
+    recentRuns: PublicDashboardListItem[];
+    hotIssues: PublicDashboardHotIssue[];
+    trends: PublicDashboardTrendItem[];
+    knowledgeGaps: PublicDashboardGapItem[];
+    releaseTracks: PublicDashboardVersionItem[];
+    logs: string[];
+    toolCalls: PublicDashboardToolCall[];
+    knowledgeSources: PublicDashboardKnowledgeSource[];
+  };
+}
+
+export interface PublicDashboardPrompt {
+  title: string;
+  summary: string;
+  prompt: string;
+}
+
+export interface PublicDashboardKnowledgeScope {
+  versionId: VersionId | "";
+  versionName: string;
+  status: string;
+  description: string;
+  sourceCount: number;
+  totalSourceCount: number;
+  tags: string[];
+}
+
+export interface PublicDashboardListItem {
+  title: string;
+  meta: string;
+  time?: string;
+  status?: string;
+}
+
+export interface PublicDashboardKnowledgeItem {
+  title: string;
+  path: string;
+  tags: string[];
+  meta: string;
+  versionId: VersionId | "";
+}
+
+export interface PublicDashboardSourceItem {
+  name: string;
+  count: number;
+  tone: string;
+}
+
+export interface PublicDashboardVersionItem {
+  versionId: VersionId;
+  versionName: string;
+  status: string;
+  label: string;
+  updatedAt: string;
+}
+
+export interface PublicDashboardMetric {
+  label: string;
+  value: string;
+  unit: string;
+  trend: string;
+}
+
+export interface PublicDashboardHealthPart {
+  label: string;
+  value: number;
+}
+
+export interface PublicDashboardHotIssue {
+  rank: number;
+  title: string;
+  route: string;
+  percent: number;
+  sparkline: number[];
+}
+
+export interface PublicDashboardTrendItem {
+  title: string;
+  delta: string;
+  tone: string;
+}
+
+export interface PublicDashboardGapItem {
+  title: string;
+  status: string;
+  action: string;
+}
+
+export interface PublicDashboardToolCall {
+  name: string;
+  latency: string;
+  status: string;
+}
+
+export interface PublicDashboardKnowledgeSource {
+  name: string;
+  versionId: VersionId;
+  confidence: number;
+  sourceCount: number;
+}
+
 export interface AskRequest {
   versionId: VersionId;
   question: string;

@@ -22,7 +22,7 @@ const SERVER_ONLY_PATTERNS = [
 ];
 
 test("frontend modules import only their intended API boundary functions", () => {
-  assert.deepEqual(parseApiImports(readText("public/app.js")), ["fetchRuntimeConfig", "fetchVersions"]);
+  assert.deepEqual(parseApiImports(readText("public/app.js")), ["fetchDashboard", "fetchRuntimeConfig", "fetchVersions"]);
   assert.deepEqual(parseApiImports(readText("public/chat-stream.js")), ["openAskStream"]);
   assert.equal(parseApiImports(readText("public/sessions.js")).length, 0);
 
