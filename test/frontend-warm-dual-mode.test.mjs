@@ -31,6 +31,24 @@ test("warm dual mode shell separates customer ask surfaces from operations obser
   assert.doesNotMatch(operationsBlock, /id="ask-form"|id="question"|id="ask-button"/);
 });
 
+test("warm dual mode keeps legacy runtime ids required by app bootstrap", () => {
+  const source = readText("public/index.html");
+
+  for (const id of [
+    "runtime-status",
+    "status-model",
+    "model-name",
+    "retrieval-mode",
+    "tool-list",
+    "version-select",
+    "ask-form",
+    "question",
+    "ask-button"
+  ]) {
+    assert.match(source, new RegExp(`id="${id}"`), `${id} should be preserved`);
+  }
+});
+
 test("warm dual mode frontend uses dashboard wrapper and responsive overflow guards", () => {
   const appSource = readText("public/app.js");
   const apiSource = readText("public/api.js");
